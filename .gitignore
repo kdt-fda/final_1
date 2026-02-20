@@ -6,3 +6,4 @@ __pycache__/
 docs_cache/
 *.csv
 practice/
+data/
