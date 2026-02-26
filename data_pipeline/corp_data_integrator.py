@@ -1,19 +1,15 @@
-import os
 import sys
 import pandas as pd
-import OpenDartReader
 import FinanceDataReader as fdr
 from tqdm import tqdm
-from dotenv import load_dotenv
 from pathlib import Path
 
-# .env 로드 및 DART API 연결
-BASE_DIR = Path(__file__).resolve().parents[1] # parents의 숫자 바꾸면 더 상위 경로로 지정 가능
-load_dotenv(BASE_DIR / ".env")
+# 경로 잡기
+temp_base = Path(__file__).resolve().parents[1]
+if str(temp_base) not in sys.path: # import할 때 이 안에 있는 경로도 탐색하라는 뜻
+    sys.path.append(str(temp_base))
 
-def init_dart(): # API 부분
-    api_key = os.getenv('DART_API')
-    return OpenDartReader(api_key)
+from common.setting import init_dart, BASE_DIR
 
 def get_kosdaq_base(dart): # dart, krx 매칭
     dart_all = dart.corp_codes
