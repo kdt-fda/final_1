@@ -6,6 +6,7 @@ import re
 import warnings
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 from datetime import datetime
+import logging
 
 # 루트 경로를 추가하여 common 패키지를 인식하게 함
 temp_base = Path(__file__).resolve().parents[1] # parents[0]은 data_pipeline 폴더를 의미함
@@ -17,6 +18,18 @@ from common.setting import get_connection, BASE_DIR, init_dart, init_solar, init
 from common.prompts import prompt_history, prompt_outline, prompt_product, prompt_product_ratio, prompt_sales
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler("pipeline.log", mode='w', encoding='utf-8')
+    ]
+)
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
         
 def fetch_report_html(dart, corp_code):
     try:
@@ -236,9 +249,11 @@ def upload_to_report():
                         conn.commit()
                 else:
                     print(f"HTML 사업보고서 수집 실패: {error}")
+                    logging.warning(f"[{current_num}/{total_rows}] {corp_name} 건너뜀(보고서 없음): {error}")
                     
             except Exception as e: # 한 종목에서 에러 발생 시
                 print(f"{corp_name} 처리 중 오류 발생: {e}")
+                logging.error(f"[{current_num}/{total_rows}] {corp_name} 처리 중 에러: {str(e)}")
                 conn.rollback() # 해당 건만 롤백하고
                 continue # 다음 종목(for문의 다음 index)으로 진행
             
@@ -246,6 +261,7 @@ def upload_to_report():
         # 오류 발생 시 롤백
         conn.rollback()
         print(f"(롤백됨)데이터베이스 작업 중 오류 발생: {e}")
+        logging.critical(f"데이터베이스 전체 작업 중 치명적 오류: {str(e)}")
             
     finally:
         conn.close() # 풀에 연결 반납
