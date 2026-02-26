@@ -127,8 +127,8 @@ def create_report(conn):
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS report (
                     id INT AUTO_INCREMENT PRIMARY KEY,
-                    stock_code VARCHAR(10) UNIQUE,
-                    report_num VARCHAR(50),
+                    stock_code VARCHAR(10),
+                    report_num VARCHAR(50) UNIQUE,
                     report_date VARCHAR(20),
                     history_origin MEDIUMTEXT,
                     outline_origin MEDIUMTEXT,
@@ -209,7 +209,7 @@ def upload_to_report():
                     sales_ai = get_ai_answer_gpt(gpt, prompt_sales, sales)
                     
                     with conn.cursor() as cursor:
-                        # 삽입 및 업데이트
+                        # 삽입 및 업데이트, 동일한 보고서번호이면, ai 생성 부분만 업데이트(이거는 이 코드를 여러 번 수행했을 때 ai 내용만 바꾸기 위한 부분)
                         sql = """
                             INSERT INTO report (
                                 stock_code, report_num, report_date, 
@@ -218,12 +218,6 @@ def upload_to_report():
                             )
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON DUPLICATE KEY UPDATE
-                                report_num = VALUES(report_num),
-                                report_date = VALUES(report_date),
-                                history_origin = VALUES(history_origin),
-                                outline_origin = VALUES(outline_origin),
-                                product_origin = VALUES(product_origin),
-                                sales_origin = VALUES(sales_origin),
                                 history_ai = VALUES(history_ai),
                                 outline_ai = VALUES(outline_ai),
                                 product_ai = VALUES(product_ai),
