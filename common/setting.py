@@ -36,7 +36,7 @@ def init_dart(): # API 부분
 
 def init_solar(): # API 부분
     solar_api = os.getenv('SOLAR_API')
-    return OpenAI(api_key=solar_api, base_url="https://api.upstage.ai/v1")
+    return OpenAI(api_key=solar_api, base_url="https://api.upstage.ai/v1", timeout=120, max_retries=1)
 
 def init_gpt(): # API 부분
     gpt_api = os.getenv('GPT_API')
