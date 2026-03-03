@@ -4,7 +4,6 @@ import FinanceDataReader as fdr
 from tqdm import tqdm
 from pathlib import Path
 import os
-import requests
 
 # 경로 잡기
 temp_base = Path(__file__).resolve().parents[1]
@@ -139,6 +138,7 @@ def patch_fdr_session():
     fdr_data.requests = _krx_session
 
 def main():
+    # krx 로그인 부분
     krx_id = os.getenv('ID')
     krx_pw = os.getenv('PW')
     
