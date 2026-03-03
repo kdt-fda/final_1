@@ -3,13 +3,15 @@ import pandas as pd
 import FinanceDataReader as fdr
 from tqdm import tqdm
 from pathlib import Path
+import os
+import requests
 
 # 경로 잡기
 temp_base = Path(__file__).resolve().parents[1]
 if str(temp_base) not in sys.path: # import할 때 이 안에 있는 경로도 탐색하라는 뜻
     sys.path.append(str(temp_base))
 
-from common.setting import init_dart, BASE_DIR
+from common.setting import init_dart, BASE_DIR, login_krx, _krx_session
 
 def get_kosdaq_base(dart): # dart, krx 매칭
     dart_all = dart.corp_codes
@@ -129,7 +131,24 @@ def fetch_additional_info(df, dart):
         
     return pd.DataFrame(results)
 
+# FinanceDataReader 로그인 부분 해결용 함수, requests를 우리 세션으로 바꿔버리기
+def patch_fdr_session():
+    import FinanceDataReader.krx.listing as fdr_listing
+    fdr_listing.requests = _krx_session    
+    import FinanceDataReader.data as fdr_data
+    fdr_data.requests = _krx_session
+
 def main():
+    krx_id = os.getenv('ID')
+    krx_pw = os.getenv('PW')
+    
+    if login_krx(krx_id, krx_pw):
+        print("KRX 로그인 성공!")
+        import FinanceDataReader.krx.listing as fdr_listing
+        patch_fdr_session()
+    else:
+        print("KRX 로그인 실패")
+    
     dart = init_dart()
     
     # 코스닥 기본 맵 생성
