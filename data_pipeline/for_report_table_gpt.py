@@ -4,6 +4,7 @@ from pathlib import Path
 import time
 import datetime
 import shutil
+import csv
 
 # 루트 경로를 추가하여 common 패키지를 인식하게 함
 temp_base = Path(__file__).resolve().parents[1] # parents[0]은 data_pipeline 폴더를 의미함
@@ -37,9 +38,8 @@ def create_batch_file():
                     WHERE r.history_ai IS NULL OR r.history_ai = ''
                     OR r.outline_ai IS NULL OR r.outline_ai = ''
                     OR r.product_ai IS NULL OR r.product_ai = ''
-                    OR r.product_ratio_ai IS NULL OR r.product_ratio_ai = ''
                     OR r.sales_ai IS NULL OR r.sales_ai = ''
-                """ # LIMIT 3 추가해서 테스트 해보기
+                """ # LIMIT 3 추가해서 테스트 해보기, product_ratio_ai는 빈 경우도 생길 수 있으므로 null 확인에서 제외
 
                 cursor.execute(sql)
                 rows = cursor.fetchall()
@@ -158,6 +158,11 @@ def create_batch_file():
         print("-" * 50)
         print(f"총 {missing_corp_count}개 기업에서 데이터 누락이 발견되었습니다.")
         print("="*50 + "\n")
+        
+    # 새로 요청할 작업이 아예 없을 경우 빈 파일 생성 방지
+    if not batch_tasks:
+        print("새로 요청할 배치 작업이 없습니다.")
+        return None
 
     # .jsonl 파일 저장
     save_dir = BASE_DIR / "data" / "batch_files"
@@ -210,40 +215,88 @@ def submit_batch_file(file_path): # OpenAI Batch 업로드 및 실행
         return None
 
 def main():
-    input_files = create_batch_file()
-    if not input_files:
-        return
-    if input_files == "NO_BATCH":
-        print("작업할 배치가 없어 종료합니다.")
-        return
+    id_log_path = BASE_DIR / "data" / "batch_job_ids.txt"
+    save_dir = BASE_DIR / "data" / "batch_files"
+    gpt = init_gpt()
     
-    # 제출부분 => 여러 개의 분할 파일들을 순차적으로 제출
-    for file_path in input_files:
-        print(f"\n파일 제출 시작: {file_path}")
-        job_id = submit_batch_file(file_path)
-        
-        if job_id: # 제출되면 시간, 파일명, job_id 파일에 저장
-            time.sleep(1)
-            id_log_path = BASE_DIR / "data" / "batch_job_ids.txt"
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    while True:
+        if id_log_path.exists():
+            with open(id_log_path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                jobs = list(reader)
             
-            file_exists = id_log_path.exists()
-            with open(id_log_path, "a", encoding="utf-8") as f:
-                if not file_exists:
-                    f.write("created_at,file_name,job_id\n") # 컬럼 헤더 추가
-                f.write(f"{current_time},{Path(file_path).name},{job_id}\n")
-            
-            print(f"성공: {job_id} 저장됨.")
-        else:
-            print(f"실패: {file_path} 제출 중 오류 발생.")
-        
-    try: # batch_file 생성된거 제출 끝나면 삭제
-        save_dir = BASE_DIR / "data" / "batch_files"
+            if jobs:
+                job_id = jobs[0]['job_id']
+                print(f"\n현재 대기 중인 작업이 있습니다. (Job ID: {job_id})")
+
+                # 작업이 끝날 때까지 대기
+                while True:
+                    try:
+                        batch_job = gpt.batches.retrieve(job_id)
+                        status = batch_job.status
+                        print(f"상태 : {status}")
+                        
+                        # 작업이 끝나거나 실패하면 DB 처리 스크립트 실행
+                        if status in ["completed", "failed", "cancelled", "expired"]:
+                            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 작업 상태가 '{status}'로 변경되었습니다.")
+                            
+                            # 외부 파이썬 파일인 for_report_table_db의 main 함수를 여기서 직접 실행
+                            import for_report_table_db
+                            for_report_table_db.main()
+                            break # 대기 루프 탈출, 다음 파일 확인으로 넘어감
+                    except Exception as e:
+                        print(f"상태 확인 중 일시적인 오류 발생: {e}")
+                    
+                    # 아직 진행 중이면 60초 대기 후 다시 확인 (API 호출 제한 방지)
+                    time.sleep(60)
+                    
+        # 대기 중인 .jsonl 파일이 있는지 확인
+        input_files = []
         if save_dir.exists():
-            shutil.rmtree(save_dir)
-            print(f"\n임시 폴더 삭제 완료: {save_dir}")
-    except Exception as e:
-        print(f"폴더 삭제 중 오류 발생: {e}")
+            input_files = sorted(list(save_dir.glob("*.jsonl")), key=lambda x: int(x.stem.split('_')[-1]))
+
+        # .jsonl 파일이 없으면 생성
+        if not input_files:
+            print("현재 보유중인 batch 파일이 없어 데이터를 조회합니다.")
+            generated_files = create_batch_file()
+            
+            # 여기서 생성된 파일이 아예 없다면 작업할 내용이 없으므로 최종 종료
+            if not generated_files:
+                print("db에 모든 내용이 적재되어 있어 종료합니다.")
+                try:
+                    if save_dir.exists():
+                        shutil.rmtree(save_dir) # .jsonl 파일 삭제, 다썼으니깐
+                except:
+                    pass
+                break # 전체 무한 루프 탈출
+                
+            input_files = [Path(p) for p in generated_files]
+
+        if not input_files:
+            break
+
+        # 맨 앞의 1개만 선택해서 제출
+        file_to_submit = input_files[0]
+        print(f"파일 제출 시작: {file_to_submit.name}")
+        job_id = submit_batch_file(str(file_to_submit))
+
+        if job_id:
+            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # 새 작업 기록 저장
+            with open(id_log_path, "w", encoding="utf-8") as f:
+                f.write("created_at,file_name,job_id\n")
+                f.write(f"{current_time},{file_to_submit.name},{job_id}\n")
+
+            print(f"성공: {job_id} 저장 완료. (제출된 파일은 삭제됨)")
+            
+            # 제출이 완료된 파일은 중복 제출 방지를 위해 삭제
+            file_to_submit.unlink(missing_ok=True)
+            
+        else:
+            print(f"실패: {file_to_submit.name} 제출 중 오류 발생. 60초 후 재시도합니다.")
+            time.sleep(60)
+
 
 if __name__ == "__main__":
     main()
