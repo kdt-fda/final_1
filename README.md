@@ -24,3 +24,31 @@
 # 웹 실행 test
 - cd web_service (web_service로 이동)
 - python manage.py runserver (웹 실행)
+
+---
+
+## 환경 변수 설정
+
+프로젝트 실행을 위해 루트 디렉토리에 `.env` 파일을 생성하고 아래 항목들 설정
+
+```text
+# DART API 설정
+DART_API=
+
+# GPT (OpenAI) API 설정
+GPT_API=
+
+# Django 보안 설정
+DJANGO_SECRET_KEY=
+
+# 데이터베이스 서버 설정
+DB_HOST=
+DB_PORT=
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+
+# KRX (한국거래소) 접속 정보
+ID=
+PW=
+```
