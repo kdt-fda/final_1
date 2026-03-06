@@ -18,3 +18,9 @@
 - git pull origin develop (최신 내용 가져오기)
 - git merge 브랜치명 (합칠 브랜치 명 입력해서 합치기)
 - git push origin develop (원격 저장소에 푸시)
+
+---
+
+# 웹 실행 test
+- cd web_service (web_service로 이동)
+- python manage.py runserver (웹 실행)
