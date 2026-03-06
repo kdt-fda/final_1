@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open-Q | KOSDAQ 기업 분석</title>
+    <style>
+        /* (기존 스타일 유지) */
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container { width: 100%; max-width: 800px; text-align: center; margin-top: 100px; }
+        h1 { font-size: 3rem; margin-bottom: 10px; }
+        p { color: #555; line-height: 1.6; }
+        .search-container { margin: 40px 0; position: relative; }
+        .search-input {
+            width: 100%; padding: 15px 25px; border-radius: 30px; border: 1px solid #ddd;
+            font-size: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.05); outline: none;
+        }
+        .search-button { /* 버튼 스타일 추가 */
+            position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 1.2rem;
+        }
+        .top10-section { text-align: left; margin-top: 50px; width: 100%; }
+        .top10-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .stock-item { 
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 10px 0; border-bottom: 1px solid #f0f0f0; 
+            text-decoration: none; color: inherit; /* 링크 스타일 초기화 */
+        }
+        .stock-item:hover { background-color: #f8faff; }
+        .rank { font-weight: bold; margin-right: 15px; color: #888; }
+        .corp-name { flex-grow: 1; font-weight: 500; }
+        .price-box { text-align: right; }
+        .price { font-weight: bold; display: block; }
+        .fluct { font-size: 0.85rem; }
+        .up { color: #e74c3c; }
+        .down { color: #3498db; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><a href="{% url 'home' %}" style="text-decoration: none; color: inherit;">Open-Q</a></h1>
+    
+    <p>{{ count }}여개의 KOSDAQ 기업 분석 결과를 제공합니다.<br>관심 기업의 가치를 알아보세요.</p>
+
+    <form action="{% url 'search' %}" method="get" class="search-container">
+        <input type="text" name="q" class="search-input" placeholder="기업명을 입력하세요" required>
+        <button type="submit" class="search-button">🔍</button>
+    </form>
+
+    <div class="top10-section">
+        <h3>거래대금 TOP 10</h3>
+        <div class="top10-grid">
+            
+            <a href="{% url 'ai_page' '037440' %}" class="stock-item">
+                <span class="rank">1</span>
+                <span class="corp-name">미래에셋벤처투자</span>
+                <div class="price-box">
+                    <span class="price">22,100</span>
+                    <span class="fluct up">+5,100 (30.00%)</span>
+                </div>
+            </a>
+
+            <a href="{% url 'ai_page' '005930' %}" class="stock-item">
+                <span class="rank">2</span>
+                <span class="corp-name">삼성전자</span>
+                <div class="price-box">
+                    <span class="price">166,900</span>
+                    <span class="fluct up">+16,500 (10.97%)</span>
+                </div>
+            </a>
+            
+            </div>
+    </div>
+</div>
+
+</body>
+</html>

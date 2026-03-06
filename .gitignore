@@ -1,10 +1,24 @@
+# 가상환경 (중복 제거)
 .venv/
+venv/
+
+# 파이썬 캐시 및 체크포인트
 __pycache__/
+*.py[cod]
 *.pyc
 .ipynb_checkpoints/
+
+# 보안 및 환경 설정 (매우 중요!)
 .env
+*.env
+
+# 데이터 및 로그 (용량 및 보안)
 docs_cache/
+*.log
 *.csv
 practice/
 data/
-venv/
+
+# 장고 로컬 DB 및 정적 파일
+db.sqlite3
+web_service/static/

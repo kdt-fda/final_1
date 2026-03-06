@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>'{{ query }}' 검색 결과</title>
+</head>
+<body>
+    <h1>'{{ query }}'에 대한 검색 결과</h1>
+    
+    {% if results %}
+        <p>총 {{ results|length }}개의 기업이 검색되었습니다.</p>
+        <ul>
+            {% for company in results %}
+                <li>
+                    <a href="{% url 'ai_page' company.stock_code %}">
+                        <strong>{{ company.corp_name }}</strong> ({{ company.stock_code }})
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>검색 결과가 없습니다. 기업명을 다시 확인해 주세요.</p>
+    {% endif %}
+
+    <hr>
+    <a href="{% url 'home' %}">홈으로 돌아가기</a>
+</body>
+</html>
