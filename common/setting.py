@@ -31,6 +31,8 @@ pool = PooledDB(
     **db_config
 )
 
+DJANGO_SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+
 def get_connection():
     return pool.connection()
 
