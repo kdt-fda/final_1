@@ -108,7 +108,7 @@ def load_bok_io(conn):
 
 def load_ind_io(conn):
     """
-    io_rawdata.csv -> IND_IO 적재 (2023년 데이터만, 산업코드 1~83만)
+    io_rawdata.csv -> IND_IO 적재 (최신 연도 자동 탐지)
     """
 
     file_path = BASE_DIR / "data" / "io_rawdata.csv"
@@ -122,12 +122,18 @@ def load_ind_io(conn):
         }
     )
 
+    # 🔹 연도 컬럼 자동 탐지
+    year_cols = [col for col in df.columns if col.isdigit()]
+    latest_year = max(year_cols)
+
+    print(f"사용 연도: {latest_year}")
+
     # 필요한 컬럼만
     df = df[
         [
             "코드(수요부문(열))",
             "코드(투입부문(행))",
-            "2023"
+            latest_year
         ]
     ].copy()
 
@@ -136,7 +142,7 @@ def load_ind_io(conn):
         columns={
             "코드(수요부문(열))": "out_io_code",
             "코드(투입부문(행))": "in_io_code",
-            "2023": "trade_vol"
+            latest_year: "trade_vol"
         }
     )
 
@@ -157,32 +163,26 @@ def load_ind_io(conn):
 
     df = df.dropna(subset=["out_io_code_num", "in_io_code_num"]).copy()
 
-    # 산업코드 1~83만 남기기
+    # 산업코드 1~83만
     df = df[
         (df["out_io_code_num"] >= 1) & (df["out_io_code_num"] <= 83) &
         (df["in_io_code_num"] >= 1) & (df["in_io_code_num"] <= 83)
     ].copy()
 
-    # DB에는 문자열 코드로 넣기
     df["out_io_code"] = df["out_io_code_num"].astype(int).astype(str)
     df["in_io_code"] = df["in_io_code_num"].astype(int).astype(str)
 
     # trade_vol 숫자 변환
     df["trade_vol"] = pd.to_numeric(df["trade_vol"], errors="coerce")
+    df = df.dropna(subset=["trade_vol"])
 
-    # 결측 제거
-    df = df.dropna(subset=["trade_vol"]).copy()
+    # 🔹 연도 자동 설정
+    df["year"] = int(latest_year)
 
-    # 연도 추가
-    df["year"] = 2023
-
-    # 소수점 정리
     df["trade_vol"] = df["trade_vol"].round(2)
 
-    # 최종 컬럼만
     df = df[["trade_vol", "year", "out_io_code", "in_io_code"]]
 
-    # 중복 제거
     df = df.drop_duplicates(subset=["year", "out_io_code", "in_io_code"])
 
     rows = list(
@@ -202,8 +202,7 @@ def load_ind_io(conn):
 
     conn.commit()
 
-    print(f"IND_IO 2023 데이터 적재 완료: {len(rows)}건")
-
+    print(f"IND_IO {latest_year} 데이터 적재 완료: {len(rows)}건")
 
 if __name__ == "__main__":
 

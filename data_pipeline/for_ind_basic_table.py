@@ -250,10 +250,15 @@ def load_ind_bok(conn, year: int):
         print(f"(롤백됨) IND_BOK {year} 적재 중 오류 발생: {e}")
 
 
-def load_ind_bok_all(conn, years=(2022, 2023, 2024)):
+def load_ind_bok_all(conn):
     """
-    여러 연도를 한 번에 적재
+    CSV에 있는 모든 연도 자동 적재
     """
+    file_path = BASE_DIR / "data" / "rate_ind.csv"
+    df = pd.read_csv(file_path, encoding="utf-8-sig")
+    # 숫자로 된 컬럼 = 연도 컬럼
+    years = sorted([int(c) for c in df.columns if c.isdigit()])
+    print("적재할 연도:", years)
     for year in years:
         load_ind_bok(conn, year)
 
