@@ -7,3 +7,4 @@ docs_cache/
 *.csv
 practice/
 data/
+venv/
