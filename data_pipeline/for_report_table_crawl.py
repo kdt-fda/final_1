@@ -174,7 +174,7 @@ def create_report(conn):
         conn.rollback()
         print(f"(롤백됨)데이터베이스 작업 중 오류 발생: {e}")
 
-def upload_to_report():
+def upload_to_report_origin():
     dart = init_dart()
 
     # csv_path = BASE_DIR / "data" / "test.csv" # 테스트용
@@ -325,7 +325,7 @@ def upload_to_report():
     
 
 def main():
-    upload_to_report()
+    upload_to_report_origin()
 
 if __name__ == "__main__":
     main()
