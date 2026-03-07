@@ -9,16 +9,16 @@ def search(request):
     query = request.GET.get('q', '')
     
     if query:
-        # 기업명에 검색어가 포함된 데이터를 찾습니다.
+        # 기업명에 검색어가 포함된 데이터를 찾음. 여기서 활성화 된 애만 검색 가능함
         results = Basic.objects.filter(corp_name__icontains=query, is_active=True)
         
-        # 중복이 없으므로, 결과가 딱 1개라면 바로 AI 페이지로 이동시킵니다.
+        # 중복이 없으므로, 결과가 딱 1개라면 바로 AI 페이지로 이동시
         if results.count() == 1:
             return redirect('ai_page', stock_code=results.first().stock_code)
     else:
         results = []
 
-    # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줍니다.
+    # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줌
     return render(request, 'search.html', {'results': results, 'query': query})
 
 def ai_page(request, stock_code):
