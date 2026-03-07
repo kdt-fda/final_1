@@ -26,20 +26,17 @@ def create_batch_file():
             with conn.cursor() as cursor:
                 sql = """
                     SELECT 
-                        r.id,
-                        r.stock_code, 
-                        b.corp_name,
-                        r.history_origin,
-                        r.outline_origin,
-                        r.product_origin, 
-                        r.sales_origin 
+                        r.id, r.stock_code, b.corp_name,
+                        r.history_origin, r.outline_origin, r.product_origin, r.sales_origin,
+                        r.history_ai, r.outline_ai, r.product_ai, r.sales_ai, r.product_ratio_ai
                     FROM report r
                     JOIN basic b ON r.stock_code = b.stock_code
                     WHERE r.history_ai IS NULL OR r.history_ai = ''
                     OR r.outline_ai IS NULL OR r.outline_ai = ''
                     OR r.product_ai IS NULL OR r.product_ai = ''
+                    OR r.product_ratio_ai IS NULL OR r.product_ratio_ai = ''
                     OR r.sales_ai IS NULL OR r.sales_ai = ''
-                """ # LIMIT 3 추가해서 테스트 해보기, product_ratio_ai는 빈 경우도 생길 수 있으므로 null 확인에서 제외
+                """ # LIMIT 3 추가해서 테스트 해보기
 
                 cursor.execute(sql)
                 rows = cursor.fetchall()
@@ -87,7 +84,7 @@ def create_batch_file():
                     ]
                     
                     for key, prompt, current_content, ai_col in base_configs:
-                        if current_content:
+                        if current_content and (not row[ai_col] or str(row[ai_col]).strip() == ''):
                             # 이전 원문 및 AI 답변이 있으면 가져옴
                             prev_content = prev_data.get(f"{key}_origin") if prev_data else None
                             prev_ai = prev_data.get(ai_col) if prev_data else None
@@ -108,23 +105,21 @@ def create_batch_file():
                     # product 및 product_ratio 통합 처리 (원문 product_origin 공유 대응)
                     p_content = row['product_origin']
                     if p_content:
-                        prev_p_content = prev_data.get("product_origin") if prev_data else None 
-                        
-                        # 원문이 같으면 product_ai와 product_ratio_ai 둘 다 계승
-                        if prev_p_content and prev_p_content.strip() == p_content.strip() \
-                           and prev_data.get("product_ai") and prev_data.get("product_ratio_ai"):
-                            inheritance_updates["product_ai"] = prev_data["product_ai"]
-                            inheritance_updates["product_ratio_ai"] = prev_data["product_ratio_ai"]
-                        else:
-                            # 원문이 다르면 각각의 프롬프트로 새로 요청
-                            for k, p in [('product', prompt_product), ('product_ratio', prompt_product_ratio)]:
-                                task = create_batch_task(
-                                    custom_id=f"{k}-{row['id']}-{corp}",
-                                    system_prompt=p,
-                                    user_content=p_content
-                                )
-                                batch_tasks.append(task)
-                                generation_report[corp][k] = 1
+                        for k, p, ai_col in [('product', prompt_product, 'product_ai'), ('product_ratio', prompt_product_ratio, 'product_ratio_ai')]:
+                            if not row[ai_col] or str(row[ai_col]).strip() == '':
+                                prev_p_content = prev_data.get("product_origin") if prev_data else None
+                                prev_ai = prev_data.get(ai_col) if prev_data else None
+                                
+                                if prev_p_content and prev_ai and prev_p_content.strip() == p_content.strip():
+                                    inheritance_updates[ai_col] = prev_ai
+                                else:
+                                    task = create_batch_task(
+                                        custom_id=f"{k}-{row['id']}-{corp}",
+                                        system_prompt=p,
+                                        user_content=p_content
+                                    )
+                                    batch_tasks.append(task)
+                                    generation_report[corp][k] = 1
 
                     # 계승된 답변이 있다면 즉시 DB 업데이트
                     if inheritance_updates:
