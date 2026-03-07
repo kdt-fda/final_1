@@ -2,27 +2,96 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>'{{ query }}' 검색 결과</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>'{{ query }}' 검색 결과 | Open-Q</title>
+    <style>
+        body { /* body 태그의 스타일 설정 */
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; /* 글꼴 설정하는 부분 */
+            background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%); /* 화면에 파란 그라데이션 부분,  30% 지점까지 서서히 하얗게 바뀌게 해줌, 그 이후 쭉 흰색*/
+            margin: 0; /* body의 여백 부분 설정인데, 그냥 0이 나음*/
+            /* 이 아래 부분은 그냥 화면에 유연하게 잘 쌓고, 가운데에 모아두는 부분이라고 생각하면 됨 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh; /* 화면 내용이 적더라도 화면 전체 꽉차게 보이기 위한 설정 */
+            color: #333; /* 글자색 추가로 설정 */
+        }
+        /* body 안에 있는 container에 대한 설정, 전부다 가운데 정렬을 시키는 부분*/
+        .container { width: 100%; max-width: 850px; text-align: center; margin-top: 100px; padding: 20px; box-sizing: border-box; }
+        
+        /* 로고 스타일, h1이 제목을 나타내는 태그임*/
+        h1 { font-size: 3.5rem; margin-bottom: 15px; letter-spacing: -1px; }
+        h1 a { text-decoration: none; color: #000; transition: opacity 0.2s; } /* open-Q에 링크 달아놔서 링크 밑줄 없애고, 검은색 글자색, 마우스 올렸을 때 스르륵 바뀌는 애니메이션 효과 */
+        h1 a:hover { opacity: 0.7; } /* 마우스 올리면 투명도를 70%로 낮춤. 이게 위에서 0.2초간 스르륵 바뀌게 해서 애니메이션처럼 보이게 됨 */
+
+        /* 검색 정보 텍스트 확대 */
+        .search-info { text-align: center; color: #555; margin-bottom: 50px; font-size: 1.3rem; }
+        .search-info strong { color: #3498db; }
+
+        /* 결과 리스트 스타일 및 폰트 확대 */
+        .results-list { list-style: none; padding: 0; margin: 0; }
+        .result-item {
+            background: white; margin-bottom: 20px; border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .result-item:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+
+        .result-link {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 25px 30px; text-decoration: none; color: inherit;
+        }
+
+        .corp-info { display: flex; flex-direction: column; }
+        .corp-name { font-size: 1.5rem; font-weight: bold; color: #222; }
+        .stock-code { font-size: 1.1rem; color: #888; margin-top: 6px; }
+
+        .arrow { color: #3498db; font-weight: bold; font-size: 1.2rem; }
+
+        /* 결과 없음 및 하단 버튼 */
+        .no-results { text-align: center; padding: 80px 20px; font-size: 1.2rem; color: #777; }
+        .footer-nav { margin-top: 60px; text-align: center; }
+        .back-link {
+            text-decoration: none; color: #3498db; font-weight: 600; font-size: 1.1rem;
+            padding: 14px 40px; border: 2px solid #3498db; border-radius: 35px; transition: all 0.3s;
+        }
+        .back-link:hover { background: #3498db; color: white; }
+    </style>
 </head>
 <body>
-    <h1>'{{ query }}'에 대한 검색 결과</h1>
+
+<div class="container">
+    <div class="logo-container">
+        <h1><a href="{% url 'home' %}" class="logo-link">Open-Q</a></h1>
+    </div>
     
+    <div class="search-info">
+        <p><strong>'{{ query }}'</strong> 검색 결과, 총 <strong>{{ results|length }}</strong>개의 기업이 있습니다.</p>
+    </div>
+
     {% if results %}
-        <p>총 {{ results|length }}개의 기업이 검색되었습니다.</p>
-        <ul>
+        <ul class="results-list">
             {% for company in results %}
-                <li>
-                    <a href="{% url 'ai_page' company.stock_code %}">
-                        <strong>{{ company.corp_name }}</strong> ({{ company.stock_code }})
+                <li class="result-item">
+                    <a href="{% url 'ai_page' company.stock_code %}" class="result-link">
+                        <div class="corp-info">
+                            <span class="corp-name">{{ company.corp_name }}</span>
+                            <span class="stock-code">{{ company.stock_code }}</span>
+                        </div>
+                        <span class="arrow">AI 분석 리포트 보기 〉</span>
                     </a>
                 </li>
             {% endfor %}
         </ul>
     {% else %}
-        <p>검색 결과가 없습니다. 기업명을 다시 확인해 주세요.</p>
+        <div class="no-results">
+            <p>죄송합니다. 검색 결과가 없습니다.<br>기업명을 다시 한 번 확인해 주세요.</p>
+        </div>
     {% endif %}
 
-    <hr>
-    <a href="{% url 'home' %}">홈으로 돌아가기</a>
+    <div class="footer-nav">
+        <a href="{% url 'home' %}" class="back-link">홈으로 돌아가기</a>
+    </div>
+</div>
+
 </body>
 </html>
