@@ -1,6 +1,18 @@
 import sys
 import pandas as pd
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+import requests
+
+load_dotenv()
+API_KEY = os.getenv("ECOS_API_KEY")
+STAT_CODE = "501Y005"
+CYCLE = "A"
+CORP_SIZE = "A"   # 종합
+ASSET_ITEM = "501"   # 총자산증가율
+SALES_ITEM = "506"   # 매출액증가율
+
 
 temp_base = Path(__file__).resolve().parents[1]
 if str(temp_base) not in sys.path:
@@ -93,47 +105,78 @@ def load_ind_basic(conn):
         conn.rollback()
         print(f"(롤백됨) IND_BASIC 적재 중 오류 발생: {e}")
 
+def fetch_growth_all(item_code: str, year: int) -> pd.DataFrame:
+    """
+    ECOS API에서 특정 연도, 특정 계정항목의 업종 전체 데이터를 조회
+    반환 컬럼:
+    bok_code, account_name, year, value
+    """
+    url = (
+        f"https://ecos.bok.or.kr/api/StatisticSearch/"
+        f"{API_KEY}/json/kr/1/10000/"
+        f"{STAT_CODE}/{CYCLE}/{year}/{year}/"
+        f"?/{CORP_SIZE}/{item_code}"
+    )
+
+    res = requests.get(url, timeout=60)
+    res.raise_for_status()
+
+    data = res.json()
+    body = data.get("StatisticSearch") or data.get("root", {}).get("StatisticSearch")
+
+    if not body or "row" not in body:
+        raise ValueError(f"StatisticSearch 응답 구조 이상: {data}")
+
+    df = pd.DataFrame(body["row"])
+
+    df = df.rename(columns={
+        "ITEM_CODE1": "bok_code",
+        "ITEM_NAME3": "account_name",
+        "TIME": "year",
+        "DATA_VALUE": "value",
+    })
+
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
+    df["bok_code"] = df["bok_code"].astype("string").str.strip()
+
+    return df[["bok_code", "account_name", "year", "value"]]
+
+
 def transform_ind_bok_raw(year: int):
     """
-    rate_ind.csv -> 특정 연도의 원본 pivot 결과 생성
+    ECOS API -> 특정 연도의 원본 pivot 결과 생성
 
     결과 컬럼:
     bok_code, year, asset_growth_rate, sales_growth_rate
     """
-    file_path = BASE_DIR / "data" / "rate_ind.csv"
-    df = pd.read_csv(file_path, encoding="utf-8-sig")
+    asset_df = fetch_growth_all(ASSET_ITEM, year)
+    sales_df = fetch_growth_all(SALES_ITEM, year)
 
-    year_col = str(year)
+    df_all = pd.concat([asset_df, sales_df], ignore_index=True)
 
-    if year_col not in df.columns:
-        raise ValueError(f"rate_ind.csv에 {year_col} 컬럼이 없습니다.")
-
-    df = df[
-        (df["기업규모"] == "종합") &
-        (df["계정항목"].isin(["총자산증가율", "매출액증가율"]))
-    ].copy()
-
-    df = df[["코드(업종코드)", "계정항목", year_col]].copy()
-    df[year_col] = pd.to_numeric(df[year_col], errors="coerce")
-
-    pivot_df = df.pivot(
-        index="코드(업종코드)",
-        columns="계정항목",
-        values=year_col
-    ).reset_index()
+    pivot_df = (
+        df_all
+        .pivot_table(
+            index=["bok_code", "year"],
+            columns="account_name",
+            values="value",
+            aggfunc="first"
+        )
+        .reset_index()
+    )
 
     pivot_df = pivot_df.rename(columns={
-        "코드(업종코드)": "bok_code",
         "총자산증가율": "asset_growth_rate",
         "매출액증가율": "sales_growth_rate"
     })
 
-    pivot_df["bok_code"] = pivot_df["bok_code"].astype("string").str.strip()
-    pivot_df["year"] = year
-
-    pivot_df = pivot_df[
-        ["bok_code", "year", "asset_growth_rate", "sales_growth_rate"]
-    ]
+    pivot_df = pivot_df[[
+        "bok_code",
+        "year",
+        "asset_growth_rate",
+        "sales_growth_rate"
+    ]]
 
     return pivot_df
 
