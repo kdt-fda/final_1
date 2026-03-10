@@ -64,7 +64,11 @@ def load_ind_basic(conn):
     """
     try:
         file_path = BASE_DIR / "data" / "ind_basic_filled.csv"
-        df = pd.read_csv(file_path, encoding="utf-8-sig")
+        df = pd.read_csv(
+                file_path,
+                encoding="utf-8-sig",
+                dtype={"ind_code": "string", "bok_code": "string"}
+            )
 
         df = df[["ind_code", "ind_name", "ind_def", "bok_code"]].copy()
 
