@@ -6,7 +6,7 @@ class Basic(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = 'basic' # 실제 DB 테이블 이름
+        db_table = 'BASIC' # 실제 DB 테이블 이름
         managed = False    # Django가 테이블을 생성/삭제하지 않음
 
 class Report(models.Model):
@@ -22,5 +22,5 @@ class Report(models.Model):
     sales_ai = models.TextField(null=True)
 
     class Meta:
-        db_table = 'report' # 실제 DB 테이블 이름
+        db_table = 'REPORT' # 실제 DB 테이블 이름
         managed = False # Django가 테이블을 생성/삭제하지 않음
