@@ -24,9 +24,11 @@ def create_basic(conn):
                     ind_code VARCHAR(10),
                     is_active BOOLEAN DEFAULT TRUE,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    CONSTRAINT fk_basic_ind_code FOREIGN KEY (ind_code) 
+                    REFERENCES IND_BASIC(ind_code)
+                    ON DELETE SET NULL ON UPDATE CASCADE
                 );
             """) # updated_at 에서 데이터 수정시간 확인 가능
-            # FOREIGN KEY (ind_code) REFERENCES industry(ind_code) 이거 맨 뒷줄에 추가해야 됨 나중에
             print("basic 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
 
     except Exception as e:

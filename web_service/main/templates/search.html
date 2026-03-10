@@ -24,71 +24,69 @@
         h1 a { text-decoration: none; color: #000; transition: opacity 0.2s; } /* open-Q에 링크 달아놔서 링크 밑줄 없애고, 검은색 글자색, 마우스 올렸을 때 스르륵 바뀌는 애니메이션 효과 */
         h1 a:hover { opacity: 0.7; } /* 마우스 올리면 투명도를 70%로 낮춤. 이게 위에서 0.2초간 스르륵 바뀌게 해서 애니메이션처럼 보이게 됨 */
 
-        /* 검색 정보 텍스트 확대 */
+        /* 검색 정보, 로고 바로 아래 글 스타일 */
         .search-info { text-align: center; color: #555; margin-bottom: 50px; font-size: 1.3rem; }
         .search-info strong { color: #3498db; }
 
-        /* 결과 리스트 스타일 및 폰트 확대 */
-        .results-list { list-style: none; padding: 0; margin: 0; }
+        /* 결과 리스트 스타일 */
+        .results-list { list-style: none; padding: 0; margin: 0; } /* 리스트 박스 앞에 '·'를 지우고 여백 조절 */
         .result-item {
             background: white; margin-bottom: 20px; border-radius: 15px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .result-item:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        } /* 리스트 박스의 스타일 설정. 색깔이랑 여백, 그림자 설정 */
+        .result-item:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); } /* 호버 넣어서 마우스 올리면 애니메이션 효과처럼 보이게끔 */
 
-        .result-link {
+        .result-link { 
             display: flex; justify-content: space-between; align-items: center;
             padding: 25px 30px; text-decoration: none; color: inherit;
-        }
+        } /* 링크 티 안나게 하고, 안에 요소들 배치 기초 설정 */
 
-        .corp-info { display: flex; flex-direction: column; }
-        .corp-name { font-size: 1.5rem; font-weight: bold; color: #222; }
-        .stock-code { font-size: 1.1rem; color: #888; margin-top: 6px; }
+        .corp-info { display: flex; flex-direction: column; align-items: flex-start; } /* 종목 코드를 기업명 아래 쌓기 위한 설정 */
+        .corp-name { font-size: 1.5rem; font-weight: bold; color: #222; } /* 기업명 스타일 지정 */
+        .stock-code { font-size: 1.1rem; color: #888; margin-top: 6px; text-align: left; } /* 종목코드 스타일 지정 */
 
-        .arrow { color: #3498db; font-weight: bold; font-size: 1.2rem; }
+        .arrow { color: #3498db; font-weight: bold; font-size: 1.2rem; } /* 분석리포트 보기에 대한 설정 */
 
         /* 결과 없음 및 하단 버튼 */
-        .no-results { text-align: center; padding: 80px 20px; font-size: 1.2rem; color: #777; }
-        .footer-nav { margin-top: 60px; text-align: center; }
+        .no-results { text-align: center; padding: 80px 20px; font-size: 1.2rem; color: #777; } /* 검색 결과 없을 때 글자 스타일 */
+        .footer-nav { margin-top: 60px; text-align: center; } /* 홈으로 돌아가기 버튼 세팅 */
         .back-link {
-            text-decoration: none; color: #3498db; font-weight: 600; font-size: 1.1rem;
-            padding: 14px 40px; border: 2px solid #3498db; border-radius: 35px; transition: all 0.3s;
+            text-decoration: none; color: #3498db; font-weight: 600; font-size: 1.1rem; /* 링크 티 안나게 하고, 버튼 내 글자 스타일 지정 */
+            padding: 14px 40px; border: 2px solid #3498db; border-radius: 35px; transition: all 0.3s; /* 테두리 지정 및 둥글게 */
         }
-        .back-link:hover { background: #3498db; color: white; }
+        .back-link:hover { background: #3498db; color: white; } /* 마우스 올려두면 생 반전되는 효과 주기 (배경 파랑, 글자 흰색) */
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div class="logo-container">
-        <h1><a href="{% url 'home' %}" class="logo-link">Open-Q</a></h1>
-    </div>
+    <h1><a href="{% url 'home' %}">Open-Q</a></h1> <!-- 로고 누르면 홈으로 이동 -->
     
     <div class="search-info">
-        <p><strong>'{{ query }}'</strong> 검색 결과, 총 <strong>{{ results|length }}</strong>개의 기업이 있습니다.</p>
+        <p><strong>'{{ query }}'</strong> 검색 결과, 총 <strong>{{ results|length }}</strong>개의 기업이 있습니다.</p> <!-- views.py에서 넘겨받은 query와 results 사용, length는 장고 내장 함수 -->
     </div>
 
-    {% if results %}
-        <ul class="results-list">
+    {% if results %} <!-- 검색한 글자를 포함하는 corp_name이 있는 경우 -->
+        <ul class="results-list"> <!-- ul이 글머리 만드는 태그, 반드시 li랑 같이 사용해야됨 -->
             {% for company in results %}
-                <li class="result-item">
-                    <a href="{% url 'ai_page' company.stock_code %}" class="result-link">
+                <li class="result-item"> <!-- li 태그로 리스트 형태로 보여주는 것 -->
+                    <a href="{% url 'ai_page' company.stock_code %}" class="result-link"> <!-- 링크 연결 부분 -->
                         <div class="corp-info">
-                            <span class="corp-name">{{ company.corp_name }}</span>
-                            <span class="stock-code">{{ company.stock_code }}</span>
+                            <span class="corp-name">{{ company.corp_name }}</span> <!-- 회사 이름 -->
+                            <span class="stock-code">{{ company.stock_code }}</span> <!-- 종목코드 -->
                         </div>
-                        <span class="arrow">AI 분석 리포트 보기 〉</span>
+                        <span class="arrow">분석 리포트 보기 〉</span>
                     </a>
                 </li>
             {% endfor %}
         </ul>
-    {% else %}
+    {% else %} <!-- 검색한 글자를 포함하는 corp_name이 아예 없는 경우 -->
         <div class="no-results">
             <p>죄송합니다. 검색 결과가 없습니다.<br>기업명을 다시 한 번 확인해 주세요.</p>
         </div>
     {% endif %}
 
-    <div class="footer-nav">
+    <div class="footer-nav"> <!-- 이거는 있든 없든 둘다 포함 (홈으로 돌아가는 버튼) -->
         <a href="{% url 'home' %}" class="back-link">홈으로 돌아가기</a>
     </div>
 </div>

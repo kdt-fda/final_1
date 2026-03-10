@@ -146,7 +146,7 @@ def create_report(conn):
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS report (
+                CREATE TABLE IF NOT EXISTS REPORT (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     stock_code VARCHAR(10),
                     report_num VARCHAR(50) UNIQUE,
@@ -161,13 +161,13 @@ def create_report(conn):
                     product_ratio_ai MEDIUMTEXT,
                     sales_ai MEDIUMTEXT,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    CONSTRAINT fk_report_stock_code_final
-                    FOREIGN KEY (stock_code) REFERENCES basic(stock_code)
+                    CONSTRAINT fk_report_stock_code
+                    FOREIGN KEY (stock_code) REFERENCES BASIC(stock_code)
                     ON DELETE CASCADE ON UPDATE CASCADE
                 );
             """)
 
-            print("report 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
+            print("REPORT 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
 
     except Exception as e:
         # 오류 발생 시 롤백
@@ -215,7 +215,7 @@ def upload_to_report_origin():
                             target_report_num = annual_reports.iloc[0]['rcept_no']
 
                             
-                            cursor.execute("SELECT 1 FROM report WHERE report_num = %s", (target_report_num,))
+                            cursor.execute("SELECT 1 FROM REPORT WHERE report_num = %s", (target_report_num,))
                             if cursor.fetchone():
                                 print(f"{corp_name}: 이미 존재함({target_report_num}). 건너뜁니다.")
                                 continue
@@ -248,7 +248,7 @@ def upload_to_report_origin():
                 try:
                     if html: # 사업보고서가 있으면 키워드로 내용 가져와서 마크다운화 하는 것  
                         # 키위드로 본문 내용 가져오는 부분
-                        check_sql = "SELECT 1 FROM report WHERE report_num = %s"
+                        check_sql = "SELECT 1 FROM REPORT WHERE report_num = %s"
                         cursor.execute(check_sql, (report_num,))
                         if cursor.fetchone():
                             print(f"[{current_num}/{total_rows}] {corp_name}: 이미 존재하는 보고서({report_num})입니다. 건너뜁니다.({corp_name})")
@@ -268,7 +268,7 @@ def upload_to_report_origin():
 
                         # 삽입 및 업데이트
                         sql = """
-                            INSERT INTO report (stock_code, report_num, report_date, 
+                            INSERT INTO REPORT (stock_code, report_num, report_date, 
                                             history_origin, outline_origin, product_origin, sales_origin)
                             VALUES (%s, %s, %s, %s, %s, %s, %s)
                             ON DUPLICATE KEY UPDATE id = id;
@@ -285,7 +285,7 @@ def upload_to_report_origin():
 
                     else:
                         print(f"HTML 사업보고서 수집 실패: {error} -> 비활성화 처리")
-                        cursor.execute("UPDATE basic SET is_active = FALSE WHERE stock_code = %s", (stock_code,))
+                        cursor.execute("UPDATE BASIC SET is_active = FALSE WHERE stock_code = %s", (stock_code,))
                         conn.commit()
                         logging.warning(f"[{current_num}/{total_rows}] {corp_name} 건너뜀(보고서 없음): {error}")
                 
@@ -301,8 +301,8 @@ def upload_to_report_origin():
     
             # 원문 4개를 전부 추출하지 못한 기업은 비활성화 처리
             deactivate_sql = """
-                UPDATE basic b
-                JOIN report r ON b.stock_code = r.stock_code
+                UPDATE BASIC b
+                JOIN REPORT r ON b.stock_code = r.stock_code
                 SET b.is_active = FALSE
                 WHERE r.history_origin IS NULL 
                 OR r.outline_origin IS NULL 
@@ -313,7 +313,7 @@ def upload_to_report_origin():
 
             # report 테이블에서 해당 레코드 삭제하여 토큰 아끼기
             delete_sql = """
-                DELETE FROM report 
+                DELETE FROM REPORT 
                 WHERE history_origin IS NULL
                     OR outline_origin IS NULL
                     OR product_origin IS NULL

@@ -68,7 +68,7 @@
     
     <div class="description"> <!-- 여기서의 count는 main/views.py 에서 정의해놨기 때문에 바로 사용이 가능한 것. 물론 main/models.py에서도 변형이 필요하긴 함-->
         {{ count }}개의 KOSDAQ 기업 분석 결과를 제공합니다.<br>
-        관심 기업의 가치를 AI와 함께 알아보세요.
+        관심 기업의 가치를 알아보세요.
     </div> <!-- 다만 count의 경우 기본적으로 제공하는 것이기 때문에 views.py에서 전달만 해주면 됨, 여기선 전달한 key 값을 명시해 주는 것 -->
 
     <form action="{% url 'search' %}" method="get" class="search-container"> <!-- 일단은 search에서 query가 1개면 리다이렉트하는 방식임, url에 내가 검색한 단어 주소창에 넣어서 전달하게 됨-->
