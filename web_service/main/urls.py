@@ -1,4 +1,4 @@
-﻿from django.urls import path
+﻿from django.urls import path, re_path
 from . import views
 
 urlpatterns = [
@@ -8,8 +8,7 @@ urlpatterns = [
     path('ai_page/', views.ai_page_preview, name='ai_page_preview'),
     path('ai_page/<str:stock_code>/', views.ai_page, name='ai_page'),
     path('finance/', views.finance, name='finance'),
-    path('industry/', views.industry_default, name='industry_default'),
-    path('industry/<str:stock_code>/', views.industry, name='industry'),
+    re_path(r'^industry(?:/(?P<stock_code>[^/]+))?/$', views.industry, name='industry'),
     path('about/', views.about, name='about'),
     path('stats/', views.stats, name='stats'),
 ]

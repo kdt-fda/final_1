@@ -1,1 +1,211 @@
-﻿
+﻿<!DOCTYPE html>
+{% load static %} <!-- 홈 아이콘 사용하려면 이거 해줘야됨. 아이콘은 web_service/main/static/main 폴더 안에 넣기 -->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open-Q | 산업 정보</title>
+<style>
+    body {
+                font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+                background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
+                margin: 0;
+                display: flex;
+                flex-direction: column;
+                min-height: 100vh;
+            }
+            .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 56px 64px; box-sizing: border-box; }
+
+            /* 홈 아이콘 스타일 부분, home이랑 search 제외하고 스타일 통일 */
+            .home-icon { display: block; width: 56px; height: auto; opacity: 0.9;}
+            .home-link { display: inline-flex; align-items: center; text-decoration: none; transition: opacity 0.2s; }
+            .home-link:hover { opacity: 0.9; }
+
+            /* 상단 네비게이션 탭부분도 home이랑 search 제외하고 스타일 통일 */
+            .header-nav { display: flex; align-items: center; width: 100%; margin-top: 10px; position: relative; }
+            .tabs { display: flex; justify-content: flex-end; gap: 15px; margin-left: auto; flex-wrap: wrap; }
+            .tab-item {
+                padding: 12px 30px; border-radius: 25px; background: rgba(255, 255, 255, 0.6);
+                text-decoration: none; color: #555; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.8);
+                transition: all 0.3s;
+            }
+            .tab-item.active { background: #fff; color: #3498db; border-color: #3498db; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+            .tab-item:hover { background: #fff; transform: translateY(-2px); }
+
+            /* 기업 정보 헤더 */
+            .company-info-header { margin-top: 48px; }
+            .company-info-header h1 { margin: 0; font-size: clamp(2rem, 4.2vw, 3.4rem); letter-spacing: -1px; font-weight: 800; color: #050505; }
+            .industry-text { margin: 10px 0 0; font-size: clamp(1.2rem, 2.2vw, 1.8rem); font-weight: 600; color: #767676; letter-spacing: -0.3px; }
+
+            /* 섹션 카드 외부 감싸개 */
+            .section-block { margin-top: 44px; }
+
+            /* 섹션 카드 공통 디자인 */
+            .card {
+                background: #fff; border-radius: 20px; padding: 40px; margin-top: 12px;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 100%; box-sizing: border-box; /* border-box로 전체 너비 고정 */
+            }
+            .card-title {
+                font-size: 1.5rem; font-weight: bold; margin: 0;
+                border-left: 6px solid #3498db; padding-left: 15px; /* 제목 앞에 파란색 세로 실선 줘서 포인트 주기 */
+            }
+
+            .info-list { /* 회사 개요 스타일 부분 */
+                list-style: none; padding: 0; display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; /* 최소 너비 확보 가능하게끔 함 */
+            }
+
+            .info-list li { font-size: 1.2rem; line-height: 1.8; } /* 줄간격 1.8 설정, 이건 info-list의 li 태그 쪽 스타일 */
+
+            /* content-text 기본 설정, 본문의 모든 폰트 및 글자색 */
+            .content-text { font-size: 1.15rem; color: #000000; }
+            .overview-content{display:grid;grid-template-columns:auto 1fr;column-gap:22px;align-items:center}.overview-name{margin:0;font-size:clamp(1.15rem,1.6vw,1.5rem);font-weight:800;white-space:nowrap;align-self:center}.overview-detail{display:flex;column-gap:22px}.overview-divider{width:0;border-left:4px solid #111}
+            .overview-def{margin:0;font-size:1.15rem;font-weight:400;line-height:1.6;word-break:keep-all;color:#000}
+            .rank-summary{margin:26px 0 0;font-size:clamp(1rem,1.35vw,1.2rem);font-weight:600;line-height:1.5}.summary-blue{color:#0f75ff;font-weight:700}.rank-sub{margin:26px 0 0;font-size:clamp(1.08rem,1.45vw,1.3rem);font-weight:700}
+            .rank-grid{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:25px}.rank-list{list-style:none;margin:0;padding:0}
+            .rank-item{display:flex;justify-content:space-between;align-items:center;padding:15px 10px;border-bottom:1px solid #e9e8e894;transition:background .2s}.rank-item:hover{background-color:rgba(240,245,255,.5);border-radius:8px}
+            .rank-no{flex:0 0 28px;text-align:right;font-size:1.2rem;font-weight:700;margin-right:15px;color:#888}
+            .rank-name{flex:1 1 auto;min-width:0;font-weight:600;font-size:1.2rem;color:#1a1a1a;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .rank-price{flex:0 0 auto;margin-left:14px;text-align:right;min-width:120px}.rank-cap{font-weight:700;font-size:1.1rem;display:block;white-space:nowrap}.rank-change{font-size:.95rem;margin-top:3px;display:block;white-space:nowrap}
+            .rank-change.up{color:#e74c3c}.rank-change.down{color:#3498db}.rank-change.flat{color:#8a8a8a}.rank-empty{margin-top:20px;font-size:1.05rem;color:#666}
+            .appeal-content{display:flex;flex-direction:column;gap:32px}.appeal-row{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:center}
+            .appeal-chart-box{position:relative;height:280px;padding:14px;border-radius:14px;border:1px solid #e4edf8;background:#fff}
+            .appeal-trend-title{margin:0;font-size:1.2rem;font-weight:800}.appeal-trend-desc{margin:10px 0 0;font-size:1rem;line-height:1.6;word-break:keep-all}
+            .structure-card{padding:30px 24px 36px}
+            .structure-top{display:flex;justify-content:flex-end;margin-bottom:14px}
+            .structure-select-wrap{position:relative;width:280px}
+            .structure-select{width:100%;padding:12px 44px 12px 16px;border:1px solid #c4cfda;border-radius:14px;background:#fff;color:#2b3845;font-size:1rem;font-weight:600;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;box-shadow:none;transition:border-color .2s,box-shadow .2s}
+            .structure-select:hover,.structure-select:focus{border-color:#8fb5d8;box-shadow:0 0 0 3px rgba(52,152,219,.12)}
+            .structure-select-arrow{position:absolute;right:16px;top:50%;width:10px;height:10px;border-right:1.8px solid #2c6f9e;border-bottom:1.8px solid #2c6f9e;transform:translateY(-65%) rotate(45deg);pointer-events:none}
+            .structure-side-label{position:absolute;top:16px;z-index:3;font-size:1.27rem;font-weight:800;letter-spacing:.01em}
+            .structure-side-label.supplier{left:25%;transform:translateX(-50%);color:#2a6e9f}
+            .structure-side-label.buyer{left:75%;transform:translateX(-50%);color:#7f58c3}
+            .structure-graph{position:relative;min-height:620px;height:620px;border-radius:24px;background:linear-gradient(90deg,#F4FBFF 0%,#EFF8FF 40%,#F6F5FF 58%,#F7F1FF 76%,#F8F2FF 100%);border:1px solid rgba(52,152,219,.24);overflow:hidden}
+            .structure-graph::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.55) 0%,rgba(255,255,255,0) 60%);pointer-events:none}
+            .structure-lines{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+            .structure-lines path{fill:none;stroke-width:.1;stroke-linecap:round}.structure-lines path.supplier-line{stroke:#74cfff}.structure-lines path.buyer-line{stroke:#b89bff}
+            .structure-nodes{position:relative;width:100%;height:100%;z-index:2}
+            .structure-center{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);width:142px;height:142px;min-height:142px;border-radius:999px;background:linear-gradient(180deg,#ffffff 0%,#ececec 100%);border:1px solid rgba(120,120,120,.32);color:#4a4a4a;font-size:clamp(.92rem,1.15vw,1.12rem);font-weight:400;line-height:1.26;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:3px;padding:14px;box-sizing:border-box;word-break:keep-all;overflow:hidden;box-shadow:0 10px 20px rgba(120,120,120,.2);animation:centerPop .55s cubic-bezier(.2,.75,.22,1) both}
+            .structure-node{position:absolute;left:0;top:0;transform:translate(-50%,-50%);width:var(--node-size,150px);height:var(--node-size,150px);border-radius:999px;color:#153a5d;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:3px;font-size:clamp(.92rem,1.15vw,1.12rem);font-weight:400;line-height:1.26;padding:14px;box-sizing:border-box;word-break:keep-all;overflow:visible;opacity:0;animation:nodePop .62s cubic-bezier(.2,.75,.22,1) forwards;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+            .structure-node.supplier{background:radial-gradient(circle at 30% 25%,#eef9ff 0%,#d6eefc 100%);border:1px solid rgba(52,152,219,.55);color:#1f5a83;box-shadow:0 10px 20px rgba(52,152,219,.18)}.structure-node.buyer{background:radial-gradient(circle at 30% 25%,#f7efff 0%,#E7D1FF 100%);border:1px solid rgba(163,132,205,.55);color:#6f4aa8;box-shadow:0 10px 20px rgba(163,132,205,.22)}.structure-node:hover{transform:translate(-50%,-50%) translateY(-4px) scale(1.02)}.structure-node.supplier:hover{border-color:rgba(52,152,219,.8);box-shadow:0 14px 26px rgba(52,152,219,.28)}.structure-node.buyer:hover{border-color:rgba(163,132,205,.85);box-shadow:0 14px 26px rgba(163,132,205,.3)}
+            .structure-center .center-name,.structure-node .node-name{display:block;max-width:100%;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;text-shadow:0 1px 1px rgba(0,0,0,.16)}.structure-node .node-vol{display:block;font-size:.82rem;font-weight:400;line-height:1.1;opacity:.95;letter-spacing:-.01em}
+            .structure-node::after{content:attr(data-tooltip);position:absolute;left:50%;bottom:calc(100% + 11px);transform:translateX(-50%);background:#fff;color:#111;font-size:.82rem;font-weight:600;white-space:nowrap;padding:8px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.15);opacity:0;visibility:hidden;transition:opacity .18s;pointer-events:none}
+            .structure-node:hover::after{opacity:1;visibility:visible}
+            .structure-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#50657a;font-size:1rem;font-weight:600;z-index:3}
+            .structure-year{margin:12px 4px 0 0;text-align:right;color:#5d6f84;font-size:.9rem;font-weight:600}
+            @keyframes nodePop{from{opacity:0;transform:translate(-50%,-50%) scale(.86)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+            @keyframes centerPop{from{opacity:0;transform:translate(-50%,-50%) scale(.9)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}@media(max-width:900px){.container{padding:28px 18px 48px}.header-nav{flex-direction:column;align-items:flex-start;gap:14px}.tabs{justify-content:flex-start;gap:10px;width:100%}.tab-item{padding:10px 20px;font-size:.95rem}
+            .card{padding:22px 18px}.overview-content{grid-template-columns:1fr;row-gap:14px}.overview-detail{column-gap:12px}.rank-grid{grid-template-columns:1fr;row-gap:12px}.rank-item{padding:12px 8px}
+            .rank-no{flex-basis:24px;margin-right:10px;font-size:1rem}.rank-name{font-size:1rem}.rank-price{margin-left:10px;min-width:90px}.rank-cap{font-size:.96rem}.rank-change{font-size:.78rem}
+            .appeal-row{grid-template-columns:1fr}.appeal-chart-box{height:230px;padding:10px}.structure-card{padding:20px 14px 24px}.structure-top{justify-content:flex-start;margin-bottom:12px}.structure-select-wrap{width:100%}.structure-side-label{top:12px;font-size:1.14rem}.structure-side-label.supplier{left:25%;transform:translateX(-50%)}.structure-side-label.buyer{left:75%;transform:translateX(-50%)}.structure-graph{min-height:520px;height:520px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header class="header-nav">
+<a href="{% url 'home' %}" class="home-link"><img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon"></a>
+<nav class="tabs">
+<a href="{% url 'overview' %}" class="tab-item">요약</a>
+<a href="{% if company %}{% url 'ai_page' company.stock_code %}{% else %}{% url 'ai_page_preview' %}{% endif %}" class="tab-item">사업 정보</a>
+<a href="{% url 'finance' %}" class="tab-item">재무 정보</a>
+<a href="{% if company %}{% url 'industry' company.stock_code %}{% else %}{% url 'industry' %}{% endif %}" class="tab-item active">산업 정보</a>
+</nav>
+</header>
+<section class="company-info-header"><h1>{{ company.corp_name|default:"기업명" }}({{ company.stock_code|default:"종목코드" }})</h1><p class="industry-text">{{ ind_name|default:"업종명" }}</p></section>
+<section class="section-block"><h2 class="card-title">산업 개요</h2><div class="card"><div class="overview-content"><p class="overview-name">{{ ind_name|default:"업종명" }}</p>{% if ind_def %}<div class="overview-detail"><span class="overview-divider" aria-hidden="true"></span><p class="overview-def">{{ ind_def }}</p></div>{% endif %}</div></div></section>
+<section class="section-block"><h2 class="card-title">산업 내 기업 순위</h2><div class="card"><p class="rank-summary">KOSDAQ 내에서, {{ company.corp_name|default:"(기업명)" }}{{ company_topic_particle|default:"은" }} {{ ind_name|default:"(산업명)" }} <span class="summary-blue">{{ industry_total_count|default:0 }}개 기업</span> 중 시가 총액 <span class="summary-blue">{% if company_rank %}{{ company_rank }}위{% else %}-{% endif %}</span>입니다.</p><p class="rank-sub">{{ ind_name|default:"(산업명)" }} KOSDAQ 시가총액 TOP10</p>
+{% if industry_top10_left or industry_top10_right %}
+<div class="rank-grid">
+<ol class="rank-list">{% for item in industry_top10_left %}<li class="rank-item"><span class="rank-no">{{ item.rank }}</span><a href="{% url 'industry' item.stock_code %}" class="rank-name">{{ item.corp_name }}</a><div class="rank-price"><span class="rank-cap">{{ item.mktcap }}</span>{% if item.change_text %}<span class="rank-change {{ item.change_class }}">{{ item.change_text }}</span>{% endif %}</div></li>{% endfor %}</ol>
+<ol class="rank-list">{% for item in industry_top10_right %}<li class="rank-item"><span class="rank-no">{{ item.rank }}</span><a href="{% url 'industry' item.stock_code %}" class="rank-name">{{ item.corp_name }}</a><div class="rank-price"><span class="rank-cap">{{ item.mktcap }}</span>{% if item.change_text %}<span class="rank-change {{ item.change_class }}">{{ item.change_text }}</span>{% endif %}</div></li>{% endfor %}</ol>
+</div>
+{% else %}<p class="rank-empty">시가총액 데이터가 없어 순위를 표시할 수 없습니다.</p>{% endif %}
+</div></section>
+<section class="section-block"><h2 class="card-title">산업 매력도</h2><div class="card"><div class="appeal-content"><div class="appeal-row"><div class="appeal-chart-box"><canvas id="assetGrowthChart"></canvas></div><div><p class="appeal-trend-title">{{ asset_trend_title }}</p><p class="appeal-trend-desc">{{ asset_trend_desc|linebreaksbr }}</p></div></div><div class="appeal-row"><div class="appeal-chart-box"><canvas id="salesGrowthChart"></canvas></div><div><p class="appeal-trend-title">{{ sales_trend_title }}</p><p class="appeal-trend-desc">{{ sales_trend_desc|linebreaksbr }}</p></div></div></div></div></section>
+<section class="section-block"><h2 class="card-title">산업 구조</h2><div class="card structure-card"><div class="structure-top"><div class="structure-select-wrap"><select id="structureSelect" class="structure-select">{% for option in industry_structure_options %}<option value="{{ option.io_code }}" {% if option.io_code == selected_io_code %}selected{% endif %}>{{ option.io_name }}</option>{% endfor %}</select><span class="structure-select-arrow" aria-hidden="true"></span></div></div><div id="structureGraph" class="structure-graph"><span class="structure-side-label supplier">공급자</span><span class="structure-side-label buyer">구매자</span><svg id="structureLines" class="structure-lines" viewBox="0 0 100 100" preserveAspectRatio="none"></svg><div id="structureNodes" class="structure-nodes"></div><p id="structureEmpty" class="structure-empty" hidden>구조 데이터가 없어 표시할 수 없습니다.</p></div>{% if structure_year %}<p class="structure-year">기준연도: {{ structure_year }}년</p>{% endif %}</div></section>
+</div>
+{{ growth_chart_labels|json_script:"growth-chart-labels" }}
+{{ industry_asset_growth|json_script:"industry-asset-growth" }}
+{{ industry_sales_growth|json_script:"industry-sales-growth" }}
+{{ benchmark_asset_growth|json_script:"benchmark-asset-growth" }}
+{{ benchmark_sales_growth|json_script:"benchmark-sales-growth" }}
+{{ ind_name|default:"해당 산업"|json_script:"industry-name" }}
+{{ industry_structure_map|json_script:"industry-structure-map" }}
+{{ selected_io_code|default:""|json_script:"selected-io-code" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const baseLabels=JSON.parse(document.getElementById('growth-chart-labels').textContent||'[]');
+const industryAsset=JSON.parse(document.getElementById('industry-asset-growth').textContent||'[]');
+const industrySales=JSON.parse(document.getElementById('industry-sales-growth').textContent||'[]');
+const benchmarkAsset=JSON.parse(document.getElementById('benchmark-asset-growth').textContent||'[]');
+const benchmarkSales=JSON.parse(document.getElementById('benchmark-sales-growth').textContent||'[]');
+const industryName=JSON.parse(document.getElementById('industry-name').textContent||'"해당 산업"');
+const hasData=baseLabels.length>0;const labels=hasData?baseLabels.map(v=>String(v)):['-'];const safeData=(arr)=>(hasData?arr:[null]);
+function buildGrowthChart(id,barData,lineData,barLabel,lineLabel,title){const ctx=document.getElementById(id);if(!ctx)return;const resolvedBarColor='#ADD5F7';const resolvedLineColor='#4E7AC7';new Chart(ctx,{type:'bar',data:{labels,datasets:[{type:'bar',label:barLabel,data:safeData(barData),backgroundColor:resolvedBarColor,borderColor:resolvedBarColor,borderWidth:1,borderRadius:6,order:2},{type:'line',label:lineLabel,data:safeData(lineData),borderColor:resolvedLineColor,backgroundColor:resolvedLineColor,borderWidth:2,pointRadius:4,pointHoverRadius:5,tension:0,spanGaps:true,order:1}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{title:{display:true,text:title,color:'#161616',font:{size:18,weight:'700'},padding:{top:6,bottom:12}},legend:{display:true,position:'top'},tooltip:{callbacks:{label:(c)=>c.raw===null||c.raw===undefined?`${c.dataset.label}: 데이터 없음`:`${c.dataset.label}: ${Number(c.raw).toFixed(2)}%`}}},scales:{y:{ticks:{callback:(v)=>`${v}%`},grid:{color:'rgba(0, 0, 0, 0.08)'}},x:{grid:{display:false}}}}});}
+buildGrowthChart('assetGrowthChart',industryAsset,benchmarkAsset,industryName,'전체 산업','총자산증가율 추이');
+buildGrowthChart('salesGrowthChart',industrySales,benchmarkSales,industryName,'전체 산업','매출액증가율 추이');
+</script>
+<script>
+const structureMap=JSON.parse((document.getElementById('industry-structure-map')||{textContent:'{}'}).textContent||'{}');
+const selectedIoCode=JSON.parse((document.getElementById('selected-io-code')||{textContent:'""'}).textContent||'""');
+const structureSelect=document.getElementById('structureSelect');
+const structureLines=document.getElementById('structureLines');
+const structureGraph=document.getElementById('structureGraph');
+const structureNodes=document.getElementById('structureNodes');
+const structureEmpty=document.getElementById('structureEmpty');
+const fmtVol=(v)=>{const n=Number(v);return Number.isFinite(n)?(n.toLocaleString('ko-KR',{maximumFractionDigits:2})+' 백만원'):'-'};const fmtNodeVol=(v)=>{const n=Number(v);if(!Number.isFinite(n))return '-';if(Math.abs(n)<100)return n.toLocaleString('ko-KR',{maximumFractionDigits:2})+'백만원';const eok=Math.trunc(n/100);return eok.toLocaleString('ko-KR')+'억원';};const fitNameText=(wrapper,nameEl,minPx=8.5)=>{if(!wrapper||!nameEl)return;let fs=parseFloat(window.getComputedStyle(nameEl).fontSize);if(!Number.isFinite(fs))fs=16;let guard=0;while(guard<24&&fs>minPx&&(wrapper.scrollHeight>wrapper.clientHeight||nameEl.scrollHeight>nameEl.clientHeight+1)){fs-=0.6;nameEl.style.fontSize=fs+"px";guard++;}};
+const sizeOf=(v,min,max)=>{const n=Number(v);if(!Number.isFinite(n))return 132;if(!Number.isFinite(min)||!Number.isFinite(max)||min===max)return 176;return Math.round(108+(236-108)*((n-min)/(max-min)));};
+const addCurve=(x,y,isLeft,lineType="supplier",delayMs=0)=>{const cx=50,cy=52;const cp1x=isLeft?cx-10:cx+10;const cp1y=cy+(y<cy?-7:7);const cp2x=isLeft?x+12:x-12;const cp2y=y;const path=document.createElementNS("http://www.w3.org/2000/svg","path");path.classList.add(lineType==="buyer"?"buyer-line":"supplier-line");path.setAttribute("d",`M ${cx} ${cy} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x} ${y}`);structureLines.appendChild(path);const len=path.getTotalLength();path.style.strokeDasharray=`${len} ${len}`;path.style.strokeDashoffset=`${len}`;path.style.opacity="0.9";window.requestAnimationFrame(()=>{path.style.transition=`stroke-dashoffset 620ms cubic-bezier(.22,.77,.25,1) ${delayMs}ms, opacity 280ms ease ${delayMs}ms`;path.style.strokeDashoffset="0";path.style.opacity="1";});};
+const addNode=(item,x,y,size,delayMs=0,nodeType="supplier")=>{const n=document.createElement("div");n.className=`structure-node ${nodeType}`;n.style.left=`${x}%`;n.style.top=`${y}%`;n.style.setProperty("--node-size",`${size}px`);n.style.animationDelay=`${delayMs}ms`;n.dataset.tooltip=`거래량: ${fmtVol(item.trade_vol)}`;const name=item.io_name||"-";n.innerHTML=`<span class="node-name">${name}</span><small class="node-vol">${fmtNodeVol(item.trade_vol)}</small>`;structureNodes.appendChild(n);fitNameText(n,n.querySelector(".node-name"),8.5);};
+function renderStructure(ioCode){if(!structureLines||!structureNodes||!structureEmpty)return;if(structureGraph)structureGraph.style.height='620px';structureLines.innerHTML='';structureNodes.innerHTML='';structureEmpty.hidden=true;const selected=structureMap[ioCode]||null;const center=document.createElement('div');center.className='structure-center';const centerName=(selected&&selected.io_name)||(structureSelect&&structureSelect.selectedOptions&&structureSelect.selectedOptions[0]?structureSelect.selectedOptions[0].textContent.trim():'산업');const centerNameEl=document.createElement('span');centerNameEl.className='center-name';centerNameEl.textContent=centerName;center.appendChild(centerNameEl);structureNodes.appendChild(center);fitNameText(center,centerNameEl,9);if(!selected){structureEmpty.hidden=false;return;}const suppliers=Array.isArray(selected.suppliers)?selected.suppliers.slice(0,3):[];const buyers=Array.isArray(selected.buyers)?selected.buyers.slice(0,3):[];if(!suppliers.length&&!buyers.length){structureEmpty.hidden=false;return;}const vols=[...suppliers,...buyers].map(i=>Number(i.trade_vol)).filter(Number.isFinite);const min=vols.length?Math.min(...vols):NaN,max=vols.length?Math.max(...vols):NaN;const sizedSuppliers=suppliers.map(it=>({...it,_size:sizeOf(it.trade_vol,min,max)}));const sizedBuyers=buyers.map(it=>({...it,_size:sizeOf(it.trade_vol,min,max)}));const maxNodeSize=Math.max(144,...sizedSuppliers.map(v=>v._size),...sizedBuyers.map(v=>v._size));const desiredHeight=Math.min(860,Math.max(620,Math.round(maxNodeSize*3.1+160)));if(structureGraph)structureGraph.style.height=`${desiredHeight}px`;const makeSlots=(count,isLeft)=>{if(count<=0)return[];const ys=count===1?[52]:count===2?[34,70]:[24,52,80];const xs=isLeft?(count===1?[20]:count===2?[21,21]:[19,23,19]):(count===1?[80]:count===2?[79,79]:[81,77,81]);return ys.map((y,i)=>({x:xs[i],y}));};const sp=makeSlots(sizedSuppliers.length,true),bp=makeSlots(sizedBuyers.length,false);sizedSuppliers.forEach((it,i)=>{if(!sp[i])return;const d=120+i*90;addCurve(sp[i].x,sp[i].y,true,"supplier",d);addNode(it,sp[i].x,sp[i].y,it._size,d+90,"supplier");});sizedBuyers.forEach((it,i)=>{if(!bp[i])return;const d=180+i*90;addCurve(bp[i].x,bp[i].y,false,"buyer",d);addNode(it,bp[i].x,bp[i].y,it._size,d+90,"buyer");});}
+if(structureSelect){const init=structureSelect.value||selectedIoCode||'';renderStructure(init);structureSelect.addEventListener('change',(e)=>{const io=e.target.value;renderStructure(io);const u=new URL(window.location.href);if(io)u.searchParams.set('io_code',io);else u.searchParams.delete('io_code');window.history.replaceState({},'',u);});}
+</script></body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
