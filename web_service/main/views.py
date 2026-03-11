@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Basic, Report
+import json
 
 def home(request):
     count = Report.objects.count()
@@ -23,25 +24,38 @@ def search(request):
     return render(request, 'search.html', {'results': results, 'query': query})
 
 def ai_page(request, stock_code):
-    # 종목코드로 기본 정보와 리포트를 가져옵니다.
-    company = get_object_or_404(Basic, stock_code=stock_code)
-    report = Report.objects.filter(stock_code=stock_code).first()
-    
+    company = get_object_or_404(Basic, stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
+    report = Report.objects.filter(stock_code=stock_code).first() # 해당 종목의 report 테이블을 가져옴
+
+    # 데이터 유효성 검사 (None, 'None', '[]' 등 체크)
+    def is_invalid(value):
+        return value in [None, 'None', '[]', 'NULL', [], 'null', '', 'NULL']
+
+    # 주요 연혁 및 제품 비중 노출 여부 판단
+    show_history = report and not is_invalid(report.history_ai) # report가 있으면서 history_ai랑 product_ratio_ai는 None이 아니어야 홈페이지에 띄우기 위한 용도
+    show_ratio = report and not is_invalid(report.product_ratio_ai)
+
+    ratio_data = []
+    if show_ratio:
+        try:
+            # JSON 문자열 파싱, 딕셔너리 형태로 전환해서 넘김
+            ratio_data = json.loads(report.product_ratio_ai)
+        except (json.JSONDecodeError, TypeError):
+            show_ratio = False # json 못가져오면 show_ratio False로 해서 안보여줌
+
     context = {
         'company': company,
-        'report': report
+        'report': report,
+        'show_history': show_history,
+        'show_ratio': show_ratio,
+        'ratio_data': ratio_data, # 템플릿의 json_script에서 사용
     }
     return render(request, 'ai_page.html', context)
 
-
-
-
-# 여기서 함수 이름이랑 .html 이름 나중에 수정할 것, urls.py에서 연결할 주소 명칭도 적절하게 바꿔야됨
-def a(request):
-    return render(request, 'a.html')
-
-def about(request):
-    return render(request, 'about.html')
-
-def stats(request):
-    return render(request, 'stats.html')
+def industry(request, stock_code): # 혜원님 코드로 수정
+    company = get_object_or_404(Basic, stock_code=stock_code)
+    
+    context = {
+        'company': company,
+    }
+    return render(request, 'industry.html', context)
