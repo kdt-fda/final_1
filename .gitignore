@@ -21,4 +21,3 @@ data/
 
 # 장고 로컬 DB 및 정적 파일
 db.sqlite3
-web_service/static/
