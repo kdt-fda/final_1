@@ -1,51 +1,274 @@
 <!DOCTYPE html>
+{% load static %} <!-- 홈 아이콘 사용하려면 이거 해줘야됨. 아이콘은 web_service/main/static/main 폴더 안에 넣기 -->
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ company.corp_name }} AI 분석 리포트</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- chart.js 가져와서 쓰는거 -->
     <style>
-        .report-section { margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .ai-content { line-height: 1.6; white-space: pre-wrap; background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+        /* body랑 .container까지 home이랑 search 제외하고 스타일 통일 */
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
+            margin: 0; 
+            display: flex; 
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 56px 64px; box-sizing: border-box; }
+        
+        /* 홈 아이콘 스타일 부분, home이랑 search 제외하고 스타일 통일 */
+        .home-icon { display: block; width: 56px; height: auto; opacity: 0.9;}
+        .home-link { display: inline-flex; align-items: center; text-decoration: none; transition: opacity 0.2s; }
+        .home-link:hover { opacity: 0.9; }
+
+        /* 상단 네비게이션 탭부분도 home이랑 search 제외하고 스타일 통일 */
+        .header-nav { display: flex; align-items: center; width: 100%; margin-top: 10px; position: relative; }
+        .tabs { display: flex; justify-content: flex-end; gap: 15px; margin-left: auto; flex-wrap: wrap; }
+        .tab-item {
+            padding: 12px 30px; border-radius: 25px; background: rgba(255, 255, 255, 0.6);
+            text-decoration: none; color: #555; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+        }
+        .tab-item.active { background: #fff; color: #3498db; border-color: #3498db; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .tab-item:hover { background: #fff; transform: translateY(-2px); }
+
+        /* 기업 정보 헤더 */
+        .company-info-header { margin-top: 48px; }
+        .company-info-header h1 { margin: 0; font-size: clamp(2rem, 4.2vw, 3.4rem); letter-spacing: -1px; font-weight: 800; color: #050505; }
+        .industry-text { margin: 10px 0 0; font-size: clamp(1.2rem, 2.2vw, 1.8rem); font-weight: 600; color: #767676; letter-spacing: -0.3px; }
+
+        /* 섹션 카드 외부 감싸개 */
+        .section-block { margin-top: 44px; }
+
+        /* 섹션 카드 공통 디자인 */
+        .card { 
+            background: #fff; border-radius: 20px; padding: 40px; margin-top: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 100%; box-sizing: border-box; /* border-box로 전체 너비 고정 */
+        }
+        .card-title { 
+            font-size: 1.5rem; font-weight: bold; margin: 0;
+            border-left: 6px solid #3498db; padding-left: 15px; /* 제목 앞에 파란색 세로 실선 줘서 포인트 주기 */
+        }
+
+        .info-list { /* 회사 개요 스타일 부분 */
+            list-style: none; padding: 0; display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; /* 최소 너비 확보 가능하게끔 함 */
+        }
+
+        .info-list li { font-size: 1.2rem; line-height: 1.8; } /* 줄간격 1.8 설정, 이건 info-list의 li 태그 쪽 스타일 */
+        
+        /* content-text 기본 설정, 본문의 모든 폰트 및 글자색 */
+        .content-text { font-size: 1.15rem; color: #000000; }
+        
+        /* 자동 내어쓰기 부분 */
+        .hanging-line {
+            padding-left: 1.4em; /* 전체 텍스트 들여쓰기 공간 */
+            text-indent: -0.8em; /* 이걸로 글자가 다음줄로 넘어가면 글머리 기호 뒤에 배치되도록 간격 조절함 */
+            line-height: 1.8;
+            white-space: pre-wrap; /* 띄어쓰기 유지 */
+            word-break: keep-all; /* 단어 단위로 줄바꿈하게 함 */
+            overflow-wrap: break-word; /* 넘치는 단어 강제 줇 바꿈 */
+            margin-bottom: 6px;     /* 각 문단(줄) 사이의 간격 */
+        }
+
+        /* 매출 비중 스타일 부분 */
+        .ratio-card-content { display: flex; flex-direction: column; gap: 20px; } /* 세로 방향 배치, 자식 요소들 거리 띄우기 */
+        
+        /* 매출 비중 상단 가로 컬러 범례 */
+        .top-legend-container { /* 가로로 나열하는데, 너비 안마으면 다음줄로 넘어가게 */
+            display: flex; flex-wrap: wrap; gap: 15px; 
+            padding: 0 10px; margin-bottom: 20px;
+        }
+        .top-legend-item { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #555; } /* 범례 박스랑 글자가 가운데 오게 */
+        .color-box-rect { width: 35px; height: 14px; border-radius: 2px; } /* 박스를 가로로 조금 더 길게 만들고, 살짝 둥글게 */
+
+        /* 매출 비중 차트와 우측 리스트 배치 */
+        .chart-layout-flex { display: flex; align-items: center; gap: 80px; flex-wrap: wrap; } /* 차트 가로 배치 및 세로 중앙 배치, 리스트 길이 길어지면 차트 아래로 내려가게*/
+        .chart-canvas-area { width: 350px; height: 350px; } /* 차트 크기 고정 */
+        
+        .detail-legend-list { list-style: none; padding: 0; margin: 0; } /* 리스트의 '•'를 없앰 */
+        .detail-legend-list li {  /* 리스트 스타일 및 위치 지정 */
+            font-size: 1.3rem; font-weight: normal; line-height: 2.0; color: #000000; 
+            display: flex; align-items: center; 
+        }
+        .detail-legend-list li::before { content: "• "; margin-right: 8px; font-weight: normal; } /* 리스트의 '•'를 글자로 붙여서 간격 조절하기 편하게 함 */
     </style>
 </head>
 <body>
-    <header>
-        <h1>{{ company.corp_name }} ({{ company.stock_code }})</h1>
-        <p>공시 기반 AI 기업 분석 리포트</p>
+
+<div class="container">
+    <header class="header-nav">
+        <a href="{% url 'home' %}" class="home-link">
+            <img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon">
+        </a>
+        <nav class="tabs">  <!-- 상단의 탭 부분 -->
+            <a href="https://www.naver.com" class="tab-item">요약</a>
+            <a href="#" class="tab-item active">사업 정보</a>
+            <a href="https://www.naver.com" class="tab-item">재무 정보</a>
+            <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
+        </nav>
     </header>
 
-    {% if report %}
-        <section class="report-section">
-            <h2>• 주요 성장 연혁</h2>
-            <div class="ai-content">{{ report.history_ai }}</div>
-        </section>
+    <section class="company-info-header"> 
+        <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
+        <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div> <!-- IND_BASIC으로 넘어가서 ind_name 가져옴 -->
+    </section>
 
-        <section class="report-section">
-            <h2>• 사업 수행 구조 분석</h2>
-            <div class="ai-content">{{ report.outline_ai }}</div>
-        </section>
+    <section class="section-block">
+        <h2 class="card-title">회사 개요</h2> <!-- 회사 개요 부분 -->
+        <div class="card">
+            <ul class="info-list">
+                <li>• 회사명 : {{ company.corp_name }}</li>
+                <li>• 설립일 : {{ company.est_dt }}</li>
+                <li>• 상장일 : {{ company.ipo }}</li>
+            </ul>
+            {% if show_history %} <!-- show_history 값을 views.py 에서 받아와서 history_ai가 존재할 때만 이 부분을 보여줌 -->
+            <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 25px;">
+                <div style="font-size: 1.3rem; font-weight: bold; margin-bottom: 15px;">• 주요 연혁</div>
+                <div class="content-text">{{ report.history_ai }}</div>
+            </div>
+            {% endif %}
+        </div>
+    </section>
 
-        <section class="report-section">
-            <h2>• 주요 제품 현황</h2>
-            <div class="ai-content">{{ report.product_ai }}</div>
-        </section>
+    {% if report %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블에 내용이 있어야 보여줌 -->
+    <section class="section-block">
+        <h2 class="card-title">사업 개요</h2> <!-- 사업 개요 부분 -->
+        <div class="card">
+            <div class="content-text">{{ report.outline_ai }}</div>
+        </div>
+    </section>
 
-        <section class="report-section">
-            <h2>• 매출 비중 분석</h2>
-            <div class="ai-content">{{ report.product_ratio_ai }}</div>
-        </section>
+    <section class="section-block">
+        <h2 class="card-title">핵심 제품 및 서비스</h2> <!-- 핵심 제품 및 서비스 부분 -->
+        <div class="card">
+            <div class="content-text">{{ report.product_ai }}</div>
+        </div>
+    </section>
 
-        <section class="report-section">
-            <h2>• 최근 매출 성과 및 전망</h2>
-            <div class="ai-content">{{ report.sales_ai }}</div>
-        </section>
-    {% else %}
-        <p>죄송합니다. 해당 기업의 분석 데이터가 아직 준비되지 않았습니다.</p>
+    <section class="section-block">
+        <h2 class="card-title">매출 및 수주 상황</h2> <!-- 매출 및 수주 상황 부분 -->
+        <div class="card">
+            <div class="content-text">{{ report.sales_ai }}</div>
+        </div>
+    </section>
     {% endif %}
 
-    <footer>
-        <button onclick="history.back()">이전 페이지로</button>
-        <a href="{% url 'home' %}">홈으로 가기</a>
-    </footer>
+    {% if show_ratio %} <!-- show_ratio 값을 views.py 에서 받아와서 product_ratio_ai가 존재할 때만 이 부분을 보여줌 -->
+    <section class="section-block">
+        <h2 class="card-title">주요 제품별 매출 비중</h2>
+        <div class="card">
+            <div class="ratio-card-content">
+                <div id="topLegendArea" class="top-legend-container"></div>
+                <div class="chart-layout-flex">
+                    <div class="chart-canvas-area">
+                        <canvas id="ratioChart"></canvas>
+                    </div>
+                    <ul id="rightLegendList" class="detail-legend-list"></ul>
+                </div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+{{ ratio_data|json_script:"ratio-data-json" }} <!-- 딕셔너리 형태 받아서 실제 json 형태로 변경 -->
+
+<script>
+    // 텍스트 내어쓰기 자동 적용 부분
+    document.addEventListener("DOMContentLoaded", function() { 
+        const contentTexts = document.querySelectorAll('.content-text'); // 본문의 content-text인 태그 가져옴
+        
+        contentTexts.forEach(function(el) { // 반복문으로 안에 글자들 추출해서 rawText에 저장, 없으면 넘김
+            const rawText = el.textContent;
+            if (!rawText.trim()) return;
+            
+            // 줄바꿈 기준으로 텍스트 분리
+            const lines = rawText.split('\n');
+            el.innerHTML = ''; // 기존 텍스트 지우기
+            
+            lines.forEach(function(line) { // 반복문으로 기존 내용 지운거에 hanging-line 적용한거 넣음
+                // 각 줄을 새로운 div로 감싸고 hanging-line 클래스 부여
+                const lineDiv = document.createElement('div');
+                lineDiv.className = 'hanging-line';
+                lineDiv.textContent = line;
+                el.appendChild(lineDiv);
+            });
+        });
+    });
+
+    // 기존 차트 및 비율 관련 스크립트 유지
+    const ratioJson = JSON.parse(document.getElementById('ratio-data-json').textContent); // json 내용(product_ratio_ai) 가져옴
+    if (ratioJson && ratioJson.length > 0) { // 데이터가 존재할 때만 작업, 내림차순 정렬하는 부분(ratio로)
+        ratioJson.sort((a, b) => b.ratio - a.ratio);
+    }
+    const colorPalette = ["#FFC2D1", "#FFD39A", "#FFE47A", "#DFF2A8", "#CFEED6", "#C9EEE8", "#C7E8F2", "#CFE1FF", "#D6D4FF", "#DCC7FF", "#E7D1FF", "#F2D4FF", "#FFCFE6", "#FFD7CC", "#FFE0C2", "#EEF2A0", "#DDF4D8", "#D6F4EE", "#D6EBFF", "#E1E1FF"]; // 색상 목록들
+
+    function formatRevenue(val) {
+        if (!val) return "0"; // 데이터 없으면 "0" 반환
+        const numPart = val.toString().replace(/[^0-9]/g, ''); // 데이터에서 뒤에 단위 지움
+        const unitPart = val.toString().replace(/[0-9]/g, '');  // 데이터에서 단위만 남기고 숫자 지움
+        return Number(numPart).toLocaleString() + (unitPart || "원"); // 추출한 문자열을 숫자로 바꿔서 쉼표 찍어주고, 아까 추출한 단위 추가하거나, 없었으면 '원'을 붙임
+    }
+
+    if (ratioJson && ratioJson.length > 0) { // json 데이터가 있을 때만 수행
+        const topLegend = document.getElementById('topLegendArea'); // body에서 id가 topLegendArea인 부분 가져옴
+        const rightList = document.getElementById('rightLegendList'); // body에서 id가 rightLegendList인 부분 가져옴
+
+        ratioJson.forEach((item, index) => { // 아까 색상 목록에 해당하는 애를 % 연산으로 돌리면서 입힘
+            const color = colorPalette[index % colorPalette.length];
+            const formattedRev = formatRevenue(item.revenue); // ,랑 원 붙이는 함수
+
+            const topItem = document.createElement('div'); // div 태그 만듦
+            topItem.className = 'top-legend-item'; // 범례용으로 만들어 뒀던 클래스
+            topItem.innerHTML = `<div class="color-box-rect" style="background-color: ${color}"></div><span>${item.product_service}</span>`; // 내용 채움
+            topLegend.appendChild(topItem); // 넣음
+
+            const listItem = document.createElement('li'); // li 태그 만듦
+            listItem.innerHTML = `${item.product_service} : ${item.ratio}% (${formattedRev})`; // 글자로 내용 채움
+            rightList.appendChild(listItem); // 넣음
+        });
+
+        const ctx = document.getElementById('ratioChart').getContext('2d'); // body에서 id가 topLegendArea인 부분 가져옴
+        new Chart(ctx, { 
+            type: 'doughnut', //  도넛 차트
+            data: {
+                labels: ratioJson.map(item => item.product_service), // json 데이터에서 product_service 가져와서 라벨로 사용
+                datasets: [{
+                    data: ratioJson.map(item => item.ratio), // json 데이터에서 ratio 가져와서 데이터로 사용
+                    backgroundColor: colorPalette, // 색상 목록에서 색깔 가져옴
+                    borderWidth: 2, // 경계선
+                    hoverOffset: 15 // 마우스 올리면 15 만큼 밖으로 튀어나오게 보여줌
+                }]
+            },
+            options: {
+                responsive: true, // 브라우저 크기에 따라 차트 크기 조절
+                maintainAspectRatio: false, // 부모 박스 크기에 맞춰 차트 비율이 유연하게 변하게 함
+                cutout: '70%', // 도넛 가운데 구멍 크기 설정
+                plugins: {
+                    legend: { display: false }, // 차트 범례 숨김 처리 (위에서 이미 만들어서 필요 없음)
+                    tooltip: { // 마우스 올렸을 때 나오는 정보창 스타일 지정
+                        padding: 12, 
+                        bodySpacing: 7,
+                        bodyFont: { size: 14 },
+                        callbacks: {
+                            label: function(context) {
+                                const item = ratioJson[context.dataIndex]; // 마우스 올라간 조각을 확인해서 json 데이터에서 해당하는 항목 정보를 가져옴
+                                return [
+                                    //item.product_service, // 이거는 product_service를 이미 한번 보여줘서 지웠는데, 나중에 필요하면 주석 해제
+                                    ` 비중: ${item.ratio}% (${formatRevenue(item.revenue)})` // 비율, 금액을 보여줌
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
 </body>
 </html>
