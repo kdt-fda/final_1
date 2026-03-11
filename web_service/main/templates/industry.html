@@ -59,7 +59,7 @@
 
             /* content-text 기본 설정, 본문의 모든 폰트 및 글자색 */
             .content-text { font-size: 1.15rem; color: #000000; }
-            .overview-content{display:grid;grid-template-columns:auto 1fr;column-gap:22px;align-items:center}.overview-name{margin:0;font-size:clamp(1.15rem,1.6vw,1.5rem);font-weight:800;white-space:nowrap;align-self:center}.overview-detail{display:flex;column-gap:22px}.overview-divider{width:0;border-left:4px solid #111}
+            .overview-content{display:grid;grid-template-columns:auto 1fr;column-gap:22px;align-items:center}.overview-name{margin:0;font-size:clamp(1.15rem,1.6vw,1.5rem);font-weight:600;white-space:nowrap;align-self:center}.overview-detail{display:flex;column-gap:22px}.overview-divider{width:0;border-left:4px solid #111}
             .overview-def{margin:0;font-size:1.15rem;font-weight:400;line-height:1.6;word-break:keep-all;color:#000}
             .rank-summary{margin:26px 0 0;font-size:clamp(1rem,1.35vw,1.2rem);font-weight:600;line-height:1.5}.summary-blue{color:#0f75ff;font-weight:700}.rank-sub{margin:26px 0 0;font-size:clamp(1.08rem,1.45vw,1.3rem);font-weight:700}
             .rank-grid{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:25px}.rank-list{list-style:none;margin:0;padding:0}
@@ -77,7 +77,7 @@
             .structure-select{width:100%;padding:12px 44px 12px 16px;border:1px solid #c4cfda;border-radius:14px;background:#fff;color:#2b3845;font-size:1rem;font-weight:600;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;box-shadow:none;transition:border-color .2s,box-shadow .2s}
             .structure-select:hover,.structure-select:focus{border-color:#8fb5d8;box-shadow:0 0 0 3px rgba(52,152,219,.12)}
             .structure-select-arrow{position:absolute;right:16px;top:50%;width:10px;height:10px;border-right:1.8px solid #2c6f9e;border-bottom:1.8px solid #2c6f9e;transform:translateY(-65%) rotate(45deg);pointer-events:none}
-            .structure-side-label{position:absolute;top:16px;z-index:3;font-size:1.27rem;font-weight:800;letter-spacing:.01em}
+            .structure-side-label{position:absolute;top:16px;z-index:3;font-size:1.27rem;font-weight:600;letter-spacing:.01em}
             .structure-side-label.supplier{left:25%;transform:translateX(-50%);color:#2a6e9f}
             .structure-side-label.buyer{left:75%;transform:translateX(-50%);color:#7f58c3}
             .structure-graph{position:relative;min-height:620px;height:620px;border-radius:24px;background:linear-gradient(90deg,#F4FBFF 0%,#EFF8FF 40%,#F6F5FF 58%,#F7F1FF 76%,#F8F2FF 100%);border:1px solid rgba(52,152,219,.24);overflow:hidden}
@@ -108,12 +108,12 @@
 <a href="{% url 'overview' %}" class="tab-item">요약</a>
 <a href="{% if company %}{% url 'ai_page' company.stock_code %}{% else %}{% url 'ai_page_preview' %}{% endif %}" class="tab-item">사업 정보</a>
 <a href="{% url 'finance' %}" class="tab-item">재무 정보</a>
-<a href="{% if company %}{% url 'industry' company.stock_code %}{% else %}{% url 'industry' %}{% endif %}" class="tab-item active">산업 정보</a>
+<a href="{% if company %}{% url 'industry' company.stock_code %}{% else %}#{% endif %}" class="tab-item active">산업 정보</a>
 </nav>
 </header>
 <section class="company-info-header"><h1>{{ company.corp_name|default:"기업명" }}({{ company.stock_code|default:"종목코드" }})</h1><p class="industry-text">{{ ind_name|default:"업종명" }}</p></section>
 <section class="section-block"><h2 class="card-title">산업 개요</h2><div class="card"><div class="overview-content"><p class="overview-name">{{ ind_name|default:"업종명" }}</p>{% if ind_def %}<div class="overview-detail"><span class="overview-divider" aria-hidden="true"></span><p class="overview-def">{{ ind_def }}</p></div>{% endif %}</div></div></section>
-<section class="section-block"><h2 class="card-title">산업 내 기업 순위</h2><div class="card"><p class="rank-summary">KOSDAQ 내에서, {{ company.corp_name|default:"(기업명)" }}{{ company_topic_particle|default:"은" }} {{ ind_name|default:"(산업명)" }} <span class="summary-blue">{{ industry_total_count|default:0 }}개 기업</span> 중 시가 총액 <span class="summary-blue">{% if company_rank %}{{ company_rank }}위{% else %}-{% endif %}</span>입니다.</p><p class="rank-sub">{{ ind_name|default:"(산업명)" }} KOSDAQ 시가총액 TOP10</p>
+<section class="section-block"><h2 class="card-title">산업 내 기업 순위</h2><div class="card"><p class="rank-summary">KOSDAQ {{ ind_name|default:"(산업명)" }} 내에서<br>{{ company.corp_name|default:"(기업명)" }}{{ company_topic_particle|default:"은" }} 시가총액 기준 <span class="summary-blue">{{ industry_total_count|default:0 }}개 기업</span> 중 <span class="summary-blue">{% if company_rank %}{{ company_rank }}위{% else %}-{% endif %}</span>입니다.</p><p class="rank-sub">{{ ind_name|default:"(산업명)" }} KOSDAQ 시가총액 TOP10</p>
 {% if industry_top10_left or industry_top10_right %}
 <div class="rank-grid">
 <ol class="rank-list">{% for item in industry_top10_left %}<li class="rank-item"><span class="rank-no">{{ item.rank }}</span><a href="{% url 'industry' item.stock_code %}" class="rank-name">{{ item.corp_name }}</a><div class="rank-price"><span class="rank-cap">{{ item.mktcap }}</span>{% if item.change_text %}<span class="rank-change {{ item.change_class }}">{{ item.change_text }}</span>{% endif %}</div></li>{% endfor %}</ol>
@@ -141,9 +141,10 @@ const benchmarkAsset=JSON.parse(document.getElementById('benchmark-asset-growth'
 const benchmarkSales=JSON.parse(document.getElementById('benchmark-sales-growth').textContent||'[]');
 const industryName=JSON.parse(document.getElementById('industry-name').textContent||'"해당 산업"');
 const hasData=baseLabels.length>0;const labels=hasData?baseLabels.map(v=>String(v)):['-'];const safeData=(arr)=>(hasData?arr:[null]);
-function buildGrowthChart(id,barData,lineData,barLabel,lineLabel,title){const ctx=document.getElementById(id);if(!ctx)return;const resolvedBarColor='#ADD5F7';const resolvedLineColor='#4E7AC7';new Chart(ctx,{type:'bar',data:{labels,datasets:[{type:'bar',label:barLabel,data:safeData(barData),backgroundColor:resolvedBarColor,borderColor:resolvedBarColor,borderWidth:1,borderRadius:6,order:2},{type:'line',label:lineLabel,data:safeData(lineData),borderColor:resolvedLineColor,backgroundColor:resolvedLineColor,borderWidth:2,pointRadius:4,pointHoverRadius:5,tension:0,spanGaps:true,order:1}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{title:{display:true,text:title,color:'#161616',font:{size:18,weight:'700'},padding:{top:6,bottom:12}},legend:{display:true,position:'top'},tooltip:{callbacks:{label:(c)=>c.raw===null||c.raw===undefined?`${c.dataset.label}: 데이터 없음`:`${c.dataset.label}: ${Number(c.raw).toFixed(2)}%`}}},scales:{y:{ticks:{callback:(v)=>`${v}%`},grid:{color:'rgba(0, 0, 0, 0.08)'}},x:{grid:{display:false}}}}});}
-buildGrowthChart('assetGrowthChart',industryAsset,benchmarkAsset,industryName,'전체 산업','총자산증가율 추이');
-buildGrowthChart('salesGrowthChart',industrySales,benchmarkSales,industryName,'전체 산업','매출액증가율 추이');
+if(window.Chart){Chart.defaults.font.family="'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif";}
+function buildGrowthChart(id,industryData,benchmarkData,industryLabel,title){const ctx=document.getElementById(id);if(!ctx)return;const benchmarkBarColor='#ADD5F7';const industryBarColor='#7FB2F0';const trendColor='#4E7AC7';const trendlinePlugin={id:'industryTrendline',afterDatasetsDraw(chart,args,pluginOpts){if(!pluginOpts||pluginOpts.enabled===false)return;const dsIndex=Number.isInteger(pluginOpts.datasetIndex)?pluginOpts.datasetIndex:1;const meta=chart.getDatasetMeta(dsIndex);if(!meta||!meta.data||!meta.data.length)return;const ds=chart.data.datasets[dsIndex];const points=meta.data.filter((el,i)=>{const raw=ds&&ds.data?ds.data[i]:null;return raw!==null&&raw!==undefined&&Number.isFinite(Number(raw));});if(!points.length)return;const c=chart.ctx;c.save();c.strokeStyle=pluginOpts.color||trendColor;c.lineWidth=pluginOpts.lineWidth||1.4;c.lineJoin='round';c.lineCap='round';c.beginPath();points.forEach((el,i)=>{if(i===0)c.moveTo(el.x,el.y);else c.lineTo(el.x,el.y);});c.stroke();const r=pluginOpts.pointRadius||4;c.fillStyle=pluginOpts.color||trendColor;points.forEach((el)=>{c.beginPath();c.arc(el.x,el.y,r,0,Math.PI*2);c.fill();});c.restore();}};new Chart(ctx,{type:'bar',plugins:[trendlinePlugin],data:{labels,datasets:[{type:'bar',label:'전체 산업',data:safeData(benchmarkData),backgroundColor:benchmarkBarColor,borderColor:benchmarkBarColor,borderWidth:1,borderRadius:6,order:3},{type:'bar',label:industryLabel,data:safeData(industryData),backgroundColor:industryBarColor,borderColor:industryBarColor,borderWidth:1,borderRadius:6,order:2}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{industryTrendline:{enabled:true,datasetIndex:1,color:trendColor,lineWidth:1.4,pointRadius:4},title:{display:true,text:title,color:'#161616',font:{size:18,weight:'700'},padding:{top:6,bottom:12}},legend:{display:true,position:'top'},tooltip:{callbacks:{label:(c)=>c.raw===null||c.raw===undefined?`${c.dataset.label}: 데이터 없음`:`${c.dataset.label}: ${Number(c.raw).toFixed(2)}%`}}},scales:{y:{ticks:{callback:(v)=>`${v}%`},grid:{color:(ctx)=>Number(ctx.tick&&ctx.tick.value)===0?'rgba(0,0,0,0.35)':'rgba(0,0,0,0.08)',lineWidth:(ctx)=>Number(ctx.tick&&ctx.tick.value)===0?2:1}},x:{grid:{display:false}}}}});}
+buildGrowthChart('assetGrowthChart',industryAsset,benchmarkAsset,industryName,'총자산증가율 추이');
+buildGrowthChart('salesGrowthChart',industrySales,benchmarkSales,industryName,'매출액증가율 추이');
 </script>
 <script>
 const structureMap=JSON.parse((document.getElementById('industry-structure-map')||{textContent:'{}'}).textContent||'{}');
@@ -161,6 +162,15 @@ function renderStructure(ioCode){if(!structureLines||!structureNodes||!structure
 if(structureSelect){const init=structureSelect.value||selectedIoCode||'';renderStructure(init);structureSelect.addEventListener('change',(e)=>{const io=e.target.value;renderStructure(io);const u=new URL(window.location.href);if(io)u.searchParams.set('io_code',io);else u.searchParams.delete('io_code');window.history.replaceState({},'',u);});}
 </script></body>
 </html>
+
+
+
+
+
+
+
+
+
 
 
 
