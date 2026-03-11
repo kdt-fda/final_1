@@ -105,13 +105,16 @@
 <header class="header-nav">
 <a href="{% url 'home' %}" class="home-link"><img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon"></a>
 <nav class="tabs">
-<a href="{% url 'overview' %}" class="tab-item">요약</a>
+<a href="https://www.naver.com" class="tab-item">요약</a>
 <a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
-<a href="{% url 'finance' %}" class="tab-item">재무 정보</a>
+<a href="https://www.naver.com" class="tab-item">재무 정보</a>
 <a href="{% url 'industry' company.stock_code %}" class="tab-item active">산업 정보</a>
 </nav>
 </header>
-<section class="company-info-header"><h1>{{ company.corp_name|default:"기업명" }}({{ company.stock_code|default:"종목코드" }})</h1><p class="industry-text">{{ ind_name|default:"업종명" }}</p></section>
+<section class="company-info-header"> 
+        <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
+        <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div> <!-- IND_BASIC으로 넘어가서 ind_name 가져옴 -->
+    </section>
 <section class="section-block"><h2 class="card-title">산업 개요</h2><div class="card"><div class="overview-content"><p class="overview-name">{{ ind_name|default:"업종명" }}</p>{% if ind_def %}<div class="overview-detail"><span class="overview-divider" aria-hidden="true"></span><p class="overview-def">{{ ind_def }}</p></div>{% endif %}</div></div></section>
 <section class="section-block"><h2 class="card-title">산업 내 기업 순위</h2><div class="card"><p class="rank-summary">KOSDAQ {{ ind_name|default:"(산업명)" }} 내에서<br>{{ company.corp_name|default:"(기업명)" }}{{ company_topic_particle|default:"은" }} 시가총액 기준 <span class="summary-blue">{{ industry_total_count|default:0 }}개 기업</span> 중 <span class="summary-blue">{% if company_rank %}{{ company_rank }}위{% else %}-{% endif %}</span>입니다.</p><p class="rank-sub">{{ ind_name|default:"(산업명)" }} KOSDAQ 시가총액 TOP10</p>
 {% if industry_top10_left or industry_top10_right %}
