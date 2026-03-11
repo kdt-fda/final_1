@@ -2,7 +2,7 @@ from django.db.models import OuterRef, Subquery
 from django.db.utils import OperationalError, ProgrammingError
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .models import Basic, CompanyStock, IndBok, Report
+from .models import Basic, BokIo, CompanyStock, IndBok, IndIo, Report
 
 
 def home(request):
@@ -78,6 +78,42 @@ def _to_float(value):
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+
+def _format_change_and_rate(price_change, fluc_rt):
+    if price_change is None or fluc_rt is None:
+        return None, 'flat'
+
+    try:
+        change_value = int(price_change)
+        rate_value = float(fluc_rt)
+    except (TypeError, ValueError):
+        return None, 'flat'
+
+    if change_value > 0:
+        sign = '+'
+        css_class = 'up'
+    elif change_value < 0:
+        sign = '-'
+        css_class = 'down'
+    else:
+        sign = ''
+        css_class = 'flat'
+
+    return f"{sign}{abs(change_value):,}({abs(rate_value):.2f}%)", css_class
+
+def _company_topic_particle(name):
+    text = str(name).strip() if name is not None else ''
+    if not text:
+        return '은'
+
+    last_char = text[-1]
+    code = ord(last_char)
+    if 0xAC00 <= code <= 0xD7A3:
+        return '은' if (code - 0xAC00) % 28 != 0 else '는'
+
+    return '는'
 
 
 def _empty_growth_context():
@@ -171,7 +207,7 @@ def _get_industry_growth_data(company):
             '상승',
         ): (
             '🔄 매출 회복 신호',
-            '감소하던 매출 증가율이 다시 상승세로 전환되었습니다.\n산업 수요가 회복되는 흐름일 수 있습니다.',
+            '감소하던 매출 증가율이 다시 상승세로 전환되었습니다.\n시장 수요가 회복되는 흐름일 수 있습니다.',
         ),
         (
             '하락',
@@ -203,18 +239,23 @@ def _get_industry_marketcap_data(company):
 
     industry_qs = Basic.objects.filter(ind_code=company.ind_code).annotate(
         latest_mktcap=Subquery(latest_stock.values('mktcap')[:1]),
+        latest_price_change=Subquery(latest_stock.values('price_change')[:1]),
+        latest_fluc_rt=Subquery(latest_stock.values('fluc_rt')[:1]),
     )
     industry_with_mktcap = industry_qs.filter(latest_mktcap__isnull=False)
 
     top10_rows = list(industry_with_mktcap.order_by('-latest_mktcap', 'corp_name')[:10])
     top10 = []
     for idx, row in enumerate(top10_rows, start=1):
+        change_text, change_class = _format_change_and_rate(row.latest_price_change, row.latest_fluc_rt)
         top10.append(
             {
                 'rank': idx,
                 'corp_name': row.corp_name,
                 'stock_code': row.stock_code,
                 'mktcap': _format_mktcap(row.latest_mktcap),
+                'change_text': change_text,
+                'change_class': change_class,
             }
         )
 
@@ -231,6 +272,115 @@ def _get_industry_marketcap_data(company):
     }
 
 
+def _build_io_name_map():
+    io_name_map = {}
+    rows = (
+        BokIo.objects.exclude(io_code__isnull=True)
+        .exclude(io_code='')
+        .exclude(io_name__isnull=True)
+        .values('io_code', 'io_name')
+        .order_by('io_code')
+    )
+    for row in rows:
+        code = row.get('io_code')
+        name = row.get('io_name')
+        if code and code not in io_name_map and name:
+            io_name_map[code] = name
+    return io_name_map
+
+
+def _build_structure_rows(rows, counterpart_field, io_name_map):
+    result = []
+    for row in rows:
+        counterpart_code = getattr(row, counterpart_field, None)
+        trade_vol = _to_float(row.trade_vol)
+        if not counterpart_code or trade_vol is None:
+            continue
+
+        result.append(
+            {
+                'io_code': counterpart_code,
+                'io_name': io_name_map.get(counterpart_code) or counterpart_code,
+                'trade_vol': trade_vol,
+            }
+        )
+    return result
+
+
+def _get_industry_structure_data(company, selected_io_code=None):
+    empty = {
+        'industry_structure_options': [],
+        'industry_structure_map': {},
+        'selected_io_code': '',
+        'structure_year': None,
+    }
+    if not company.ind_code:
+        return empty
+
+    option_rows = (
+        BokIo.objects.filter(ind_code=company.ind_code)
+        .exclude(io_code__isnull=True)
+        .exclude(io_code='')
+        .values('io_code', 'io_name')
+        .order_by('io_name', 'io_code')
+    )
+
+    options = []
+    seen_codes = set()
+    for row in option_rows:
+        code = row.get('io_code')
+        name = row.get('io_name') or code
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+        options.append({'io_code': code, 'io_name': name})
+
+    if not options:
+        return empty
+
+    valid_codes = {option['io_code'] for option in options}
+    selected = selected_io_code if selected_io_code in valid_codes else options[0]['io_code']
+
+    latest_year = IndIo.objects.order_by('-year').values_list('year', flat=True).first()
+    if latest_year is None:
+        return {
+            'industry_structure_options': options,
+            'industry_structure_map': {},
+            'selected_io_code': selected,
+            'structure_year': None,
+        }
+
+    io_name_map = _build_io_name_map()
+    structure_map = {}
+    for option in options:
+        code = option['io_code']
+
+        # 기업 io_code가 out_io_code일 때 in_io_code를 공급자로 표시
+        supplier_rows = list(
+            IndIo.objects.filter(year=latest_year, out_io_code=code, trade_vol__isnull=False)
+            .order_by('-trade_vol')[:3]
+        )
+
+        # 기업 io_code가 in_io_code일 때 out_io_code를 구매자로 표시
+        buyer_rows = list(
+            IndIo.objects.filter(year=latest_year, in_io_code=code, trade_vol__isnull=False)
+            .order_by('-trade_vol')[:3]
+        )
+
+        structure_map[code] = {
+            'io_code': code,
+            'io_name': option['io_name'] or io_name_map.get(code) or code,
+            'suppliers': _build_structure_rows(supplier_rows, 'in_io_code', io_name_map),
+            'buyers': _build_structure_rows(buyer_rows, 'out_io_code', io_name_map),
+        }
+
+    return {
+        'industry_structure_options': options,
+        'industry_structure_map': structure_map,
+        'selected_io_code': selected,
+        'structure_year': latest_year,
+    }
+
 def industry_default(request):
     try:
         company = Basic.objects.filter(is_active=True).order_by('corp_name').first() or Basic.objects.order_by('corp_name').first()
@@ -238,7 +388,6 @@ def industry_default(request):
             return redirect('industry', stock_code=company.stock_code)
     except (ProgrammingError, OperationalError):
         pass
-
     context = {
         'company': None,
         'ind_name': None,
@@ -247,6 +396,11 @@ def industry_default(request):
         'company_rank': None,
         'industry_top10_left': [],
         'industry_top10_right': [],
+        'company_topic_particle': '은',
+        'industry_structure_options': [],
+        'industry_structure_map': {},
+        'selected_io_code': '',
+        'structure_year': None,
         **_empty_growth_context(),
     }
     return render(request, 'industry.html', context)
@@ -262,6 +416,13 @@ def industry(request, stock_code):
     industry_top10_left = []
     industry_top10_right = []
     growth_context = _empty_growth_context()
+    structure_context = {
+        'industry_structure_options': [],
+        'industry_structure_map': {},
+        'selected_io_code': '',
+        'structure_year': None,
+    }
+    selected_io_code = request.GET.get('io_code')
 
     try:
         if company.ind_code:
@@ -279,6 +440,12 @@ def industry(request, stock_code):
     except (ProgrammingError, OperationalError):
         pass
 
+    try:
+        if company.ind_code:
+            structure_context = _get_industry_structure_data(company, selected_io_code=selected_io_code)
+    except (ProgrammingError, OperationalError):
+        pass
+
     context = {
         'company': company,
         'ind_name': ind_name,
@@ -287,6 +454,8 @@ def industry(request, stock_code):
         'company_rank': company_rank,
         'industry_top10_left': industry_top10_left,
         'industry_top10_right': industry_top10_right,
+        'company_topic_particle': _company_topic_particle(company.corp_name),
+        **structure_context,
         **growth_context,
     }
     return render(request, 'industry.html', context)
@@ -303,3 +472,4 @@ def about(request):
 
 def stats(request):
     return render(request, 'stats.html')
+
