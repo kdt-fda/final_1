@@ -106,9 +106,9 @@
 <a href="{% url 'home' %}" class="home-link"><img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon"></a>
 <nav class="tabs">
 <a href="{% url 'overview' %}" class="tab-item">요약</a>
-<a href="{% if company %}{% url 'ai_page' company.stock_code %}{% else %}{% url 'ai_page_preview' %}{% endif %}" class="tab-item">사업 정보</a>
+<a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
 <a href="{% url 'finance' %}" class="tab-item">재무 정보</a>
-<a href="{% if company %}{% url 'industry' company.stock_code %}{% else %}#{% endif %}" class="tab-item active">산업 정보</a>
+<a href="{% url 'industry' company.stock_code %}" class="tab-item active">산업 정보</a>
 </nav>
 </header>
 <section class="company-info-header"><h1>{{ company.corp_name|default:"기업명" }}({{ company.stock_code|default:"종목코드" }})</h1><p class="industry-text">{{ ind_name|default:"업종명" }}</p></section>
@@ -162,6 +162,7 @@ function renderStructure(ioCode){if(!structureLines||!structureNodes||!structure
 if(structureSelect){const init=structureSelect.value||selectedIoCode||'';renderStructure(init);structureSelect.addEventListener('change',(e)=>{const io=e.target.value;renderStructure(io);const u=new URL(window.location.href);if(io)u.searchParams.set('io_code',io);else u.searchParams.delete('io_code');window.history.replaceState({},'',u);});}
 </script></body>
 </html>
+
 
 
 
