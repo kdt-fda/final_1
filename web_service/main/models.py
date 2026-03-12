@@ -28,29 +28,37 @@ class BokIo(models.Model):
 
 
 class CompanyFinance(models.Model):
+    stock_code = models.CharField(max_length=10)
     corp_code = models.CharField(max_length=15)
     biz_year = models.IntegerField()
-    total_assets = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    cash_and_equivalents = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    current_assets = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    accounts_receivable = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    liabilities = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    current_liabilities = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    equity = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    capital_stock = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    revenue_latest = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    revenue_1y_ago = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    revenue_2y_ago = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    gross_profit = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    net_income = models.DecimalField(max_digits=18, decimal_places=0, blank=True, null=True)
-    cashholding_ratio_pct = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    sales_growth_rate_pct = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    gross_margin_pct = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    psr = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    roe = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    net_margin_pct = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
-    debt_ratio_pct = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
-    current_ratio_pct = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    total_assets = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    cash_and_equivalents = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    current_assets = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    accounts_receivable = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    liabilities = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    current_liabilities = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    equity = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    capital_stock = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    revenue_latest = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    revenue_1y_ago = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    revenue_2y_ago = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    gross_profit = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    net_income = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    cashholding_ratio_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    sales_growth_rate_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    gross_margin_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    psr = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    roe = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    net_margin_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    debt_ratio_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    current_ratio_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
+    maj_shareholders = models.TextField(blank=True, null=True)
+    source_report_num = models.CharField(max_length=20, blank=True, null=True)
+    source_report_nm = models.CharField(max_length=255, blank=True, null=True)
+    source_report_date = models.DateField(blank=True, null=True)
+    match_status = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -59,7 +67,7 @@ class CompanyFinance(models.Model):
 
 
 class CompanyStock(models.Model):
-    stock_code = models.CharField(max_length=10)
+    stock_code = models.ForeignKey(Basic, models.DO_NOTHING, db_column='stock_code')
     reference_date = models.DateField()
     open_price = models.IntegerField(blank=True, null=True)
     prev_close_price = models.IntegerField(blank=True, null=True)
@@ -72,13 +80,12 @@ class CompanyStock(models.Model):
     book_value = models.IntegerField(blank=True, null=True)
     mktcap = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     shares_btj = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
-    shares_usj = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
+    trdvol = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     acc_trdvol = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     acc_trdval = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     bas_trdval = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     foreign_ratio = models.DecimalField(max_digits=9, decimal_places=4, blank=True, null=True)
     fluc_rt = models.DecimalField(max_digits=9, decimal_places=4, blank=True, null=True)
-    maj_shareholders = models.TextField(blank=True, null=True)
     dps = models.DecimalField(max_digits=18, decimal_places=4, blank=True, null=True)
     eps = models.DecimalField(max_digits=18, decimal_places=4, blank=True, null=True)
     dividend_yield = models.DecimalField(max_digits=6, decimal_places=3, blank=True, null=True)
@@ -117,9 +124,26 @@ class DartFin(models.Model):
         unique_together = (('corp_code', 'biz_year', 'reprt_code'),)
 
 
+class FeatureBasic(models.Model):
+    pk = models.CompositePrimaryKey('stock_code', 'date')
+    stock_code = models.CharField(max_length=10, db_comment='stock code')
+    date = models.DateField(db_comment='trade date')
+    corp_name = models.CharField(max_length=100, blank=True, null=True, db_comment='company name')
+    corp_code = models.CharField(max_length=8, blank=True, null=True, db_comment='DART corp code')
+    is_listed_on_date = models.IntegerField(blank=True, null=True, db_comment='1 listed / 0 not listed / NULL unknown')
+    is_active_now = models.IntegerField(blank=True, null=True, db_comment='1 active now / 0 delisted / NULL unknown')
+
+    class Meta:
+        managed = False
+        db_table = 'FEATURE_BASIC'
+        db_table_comment = 'Base feature table for stock modeling'
+
+
 class FeatureRaw(models.Model):
-    stock_code = models.CharField(max_length=10)
-    date = models.DateField()
+    # stock_code랑 date 복합 외래키는 장고에서 지원 안한다고 해서 일단 일반 필드로 교체
+    stock_code = models.CharField(max_length=10, db_column='stock_code')
+    date = models.DateField(db_column='date')
+    
     close = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
     trading_value = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
     foreign_netbuy_value = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
@@ -137,7 +161,7 @@ class FeatureRaw(models.Model):
     class Meta:
         managed = False
         db_table = 'FEATURE_RAW'
-        unique_together = (('stock_code', 'date', 'biz_year'),)
+        unique_together = (('stock_code', 'date', 'biz_year'), ('stock_code', 'date'),)
 
 
 class IndBasic(models.Model):
@@ -213,8 +237,8 @@ class Report(models.Model):
     updated_at = models.DateTimeField()
 
     class Meta:
-        managed = False # Django가 테이블을 생성/삭제하지 않음
-        db_table = 'REPORT' # 실제 DB 테이블 이름
+        managed = False
+        db_table = 'REPORT'
 
 
 class AuthGroup(models.Model):
