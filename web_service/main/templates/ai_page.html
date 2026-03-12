@@ -107,7 +107,7 @@
         <nav class="tabs">  <!-- 상단의 탭 부분 -->
             <a href="https://www.naver.com" class="tab-item">요약</a>
             <a href="#" class="tab-item active">사업 정보</a>
-            <a href="https://www.naver.com" class="tab-item">재무 정보</a>
+            <a href="{% url 'finance' company.stock_code %}" class="tab-item">재무 정보</a>
             <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
         </nav>
     </header>
