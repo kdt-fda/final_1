@@ -161,7 +161,7 @@ def get_existing_records(conn, start_date_str: str, end_date_str: str) -> set:
     return existing
 
 # 여러 날짜에 대해 한 종목의 피쳐들을 한 번에 파싱하는 함수
-def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, end_dt) -> pd.DataFrame:
+def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, end_dt, finance_map: dict) -> pd.DataFrame:
     end_ymd = end_dt.strftime("%Y%m%d")
     start_ymd = start_dt.strftime("%Y%m%d")
     
@@ -223,12 +223,31 @@ def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, 
         fund_feats = {"dps": None, "eps": None, "dividend_yield": None, "per": None, "pbr": None}
         if df_fund is not None and not df_fund.empty and m_dt in df_fund.index:
             fund_row = df_fund.loc[m_dt]
+            
+            raw_per = safe_to_float(fund_row.get("PER"), 4)
+            raw_pbr = safe_to_float(fund_row.get("PBR"), 4)
+            
+            mktcap = cap_feats.get("mktcap")
+            finance_info = finance_map.get(stock_code, {})
+            
+            # PER 대체 계산
+            if raw_per in (None, 0, 0.0) and mktcap is not None:
+                net_income = finance_info.get("net_income")
+                if net_income is not None and float(net_income) != 0: 
+                    raw_per = safe_to_float(mktcap / float(net_income), 4)
+
+            # PBR 대체 계산
+            if raw_pbr in (None, 0, 0.0) and mktcap is not None:
+                equity = finance_info.get("equity")
+                if equity is not None and float(equity) != 0: 
+                    raw_pbr = safe_to_float(mktcap / float(equity), 4)
+            
             fund_feats = {
                 "dps": safe_to_float(fund_row.get("DPS"), 4),
                 "eps": safe_to_float(fund_row.get("EPS"), 4),
                 "dividend_yield": safe_to_float(fund_row.get("DIV"), 3),
-                "per": safe_to_float(fund_row.get("PER"), 4),
-                "pbr": safe_to_float(fund_row.get("PBR"), 4)
+                "per": raw_per,
+                "pbr": raw_pbr
             }
 
         # 외국인 지분율 피쳐 구성
@@ -250,6 +269,37 @@ def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, 
         results.append(row_data)
 
     return pd.DataFrame(results) if results else pd.DataFrame()
+
+# COMPANY_FINANCE에서 종목별 최신 사업년도인 데이터의 stock_code, net_income, equity를 가져와 딕셔너리로 반환
+def fetch_latest_finance_data(conn):
+    sql = """
+        SELECT a.stock_code, a.net_income, a.equity
+        FROM COMPANY_FINANCE a
+        INNER JOIN (
+            SELECT stock_code, MAX(biz_year) AS max_biz_year
+            FROM COMPANY_FINANCE
+            GROUP BY stock_code
+        ) b ON a.stock_code = b.stock_code AND a.biz_year = b.max_biz_year
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+
+    finance_map = {}
+    for row in rows:
+        if isinstance(row, dict): # 딕셔너리 형태일 때 (stock_code를 키로 하고, 당기순이익, 자본총계를 딕셔너리 형태의 value로)
+            sc = str(row['stock_code']).zfill(6)
+            finance_map[sc] = {
+                "net_income": row.get('net_income'),
+                "equity": row.get('equity')
+            }
+        else: # 딕셔너리 형태겠지만 나중에 바뀔 것을 대비한 방어용 코드
+            sc = str(row[0]).zfill(6)
+            finance_map[sc] = {
+                "net_income": row[1],
+                "equity": row[2]
+            }
+    return finance_map
 
 # is_active가 활성화된 종목의 종목코드, 상장일 반환
 def fetch_listing_from_basic(conn) -> pd.DataFrame:
@@ -316,6 +366,8 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
 
     # DB에 이미 저장되어 있는 내역 가져오기(90일 이전 데이터들 중 이미 저장된 내용들을 (종목코드, 기준일) 쌍으로 가져옴)
     existing_set = get_existing_records(conn, start_dt_str, end_dt_str)
+    
+    finance_map = fetch_latest_finance_data(conn) # 당기순이익, 자본 총계 가져오기 위한 부분
 
     # 90일 동안의 KOSDAQ 실제 거래일 목록 확보
     idx_df = stock.get_index_ohlcv_by_date(start_dt.strftime("%Y%m%d"), end_dt.strftime("%Y%m%d"), "2001") # 시작일~종료일까지의 코스닥 거래일 가져옴
@@ -328,6 +380,9 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
     total_base = len(base) # 총 수집해야 하는 종목 개수
 
     for i, stock_code in enumerate(base["stock_code"], start=1): # 0 인덱스를 1로 표기
+        if i % 100 == 0: # 진행상황 확인용
+            print(f"... processing {i}/{total_base}")
+        
         # 이미 DB에 존재하는 일자는 제외하고, 적재해야 할 누락된 일자(missing_dates)만 계산
         missing_dates = [d for d in trading_days if (stock_code, d) not in existing_set] # 거래일만 있는 리스트에서 주식코드, 거래일 쌍이 이미 db에 있는지 확인해서 없는 날짜만 가져옴
         
@@ -335,16 +390,13 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
             continue # 모두 DB에 존재할 경우 깔끔히 건너뛰기
         
         try:
-            df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt)
+            df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt, finance_map)
             if df_multi is not None and not df_multi.empty:
                 rows.append(df_multi)
             else:
                 fail_list.append((stock_code, "empty result"))
         except Exception as e:
             fail_list.append((stock_code, str(e)))
-
-        if i % 100 == 0: # 진행상황 확인용
-            print(f"... processing {i}/{total_base}")
 
     print(f"성공 건수: {sum(len(r) for r in rows if r is not None)}")
     print(f"실패/누락 종목 수: {len(fail_list)}")
@@ -413,7 +465,7 @@ def upload_to_company_stock(conn, df: pd.DataFrame, chunk_size: int = 1000):
             df[col] = None
 
     df = df[ordered_cols].copy()
-    df = df.replace([np.inf, -np.inf], np.nan) # 나누기 오류 등으로 생긴 무한대 값을 NaN으로 바꿈
+    df = df.replace([np.inf, -np.inf], np.nan).infer_objects(copy=False) # 나누기 오류 등으로 생긴 무한대 값을 NaN으로 바꿈
     df = df.astype(object) # 데이터프레임을 object로 바꿈 (None 변경용)
     df = df.where(pd.notnull(df), None) # Nan 같은 값을 다 None으로 변경
 
@@ -477,6 +529,59 @@ def main():
         df = build_company_stock_base(conn, reference_date)
 
         if df is not None and not df.empty:
+            na_rows = df[df.isna().any(axis=1)]
+            
+            if not na_rows.empty:
+                # 종목별로 그룹화하여 어떤 열이 비어있는지 파악
+                missing_info = []
+                for (stock_code, ref_date), group in na_rows.groupby(['stock_code', 'reference_date']):
+                    # 해당 일자의 데이터 중 결측치가 있는 컬럼명만 리스트로 추출
+                    missing_cols = group.columns[group.isna().any()].tolist()
+                    missing_info.append({
+                        'stock_code': stock_code,
+                        'reference_date': ref_date,
+                        'missing_columns': ", ".join(missing_cols) # 보기 편하게 콤마로 연결
+                    })
+                missing_df = pd.DataFrame(missing_info)
+                
+                print(f"일부 열이 비어있는 데이터 개수(종목/일자별): {len(missing_df)}개")
+                
+                # 결측치가 있는 종목 코드만 리스트로 추출
+                unique_stocks = missing_df['stock_code'].unique().tolist()
+                
+                with conn.cursor() as cursor:
+                    if unique_stocks:
+                        # IN 절을 만들기 위한 포맷팅 (예: %s, %s, %s)
+                        format_strings = ','.join(['%s'] * len(unique_stocks))
+                        query = f"SELECT stock_code, corp_name FROM BASIC WHERE stock_code IN ({format_strings})"
+                        
+                        # 쿼리 실행 시 unique_stocks 리스트를 튜플로 전달
+                        cursor.execute(query, tuple(unique_stocks))
+                        basic_rows = cursor.fetchall()
+                        
+                        if basic_rows:
+                            if isinstance(basic_rows[0], dict):
+                                basic_df = pd.DataFrame(basic_rows)
+                            else:
+                                basic_df = pd.DataFrame(basic_rows, columns=["stock_code", "corp_name"])
+                            basic_df['stock_code'] = basic_df['stock_code'].astype(str).str.zfill(6)
+                        else:
+                            basic_df = pd.DataFrame(columns=["stock_code", "corp_name"])
+                    else:
+                        basic_df = pd.DataFrame(columns=["stock_code", "corp_name"])
+                
+                # 데이터 병합 (결측치 정보 + 회사명)
+                merged_missing_df = pd.merge(missing_df, basic_df, on='stock_code', how='left')
+                
+                # 열 순서를 깔끔하게 정리 (종목코드, 회사명, 기준일, 비어있는 열)
+                merged_missing_df = merged_missing_df[['stock_code', 'corp_name', 'reference_date', 'missing_columns']]
+                
+                # CSV 저장
+                now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                save_path = data_dir / f"stocks_with_empty_columns_{now_str}.csv"
+                merged_missing_df.to_csv(save_path, index=False, encoding='utf-8-sig')
+                print(f"일부 열이 비어있는 데이터 리스트를 '{save_path}'에 저장했습니다.")
+                
             upload_to_company_stock(conn, df)
         else:
             print("새로 업데이트할 내역이 존재하지 않아 DB 삽입을 생략합니다.")
