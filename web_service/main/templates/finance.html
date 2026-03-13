@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+{% load static humanize %} <!-- 홈 아이콘 사용하려면 이거 해줘야됨. 아이콘은 web_service/main/static/main 폴더 안에 넣기 -->
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ company.corp_name }} 재무 정보</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <style>
+        /* body랑 .container까지 home이랑 search 제외하고 스타일 통일 */
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
+            margin: 0; 
+            display: flex; 
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 56px 64px; box-sizing: border-box; }
+        
+        /* 홈 아이콘 스타일 부분, home이랑 search 제외하고 스타일 통일 */
+        .home-icon { display: block; width: 56px; height: auto; opacity: 0.9;}
+        .home-link { display: inline-flex; align-items: center; text-decoration: none; transition: opacity 0.2s; }
+        .home-link:hover { opacity: 0.9; }
+
+        /* 상단 네비게이션 탭부분도 home이랑 search 제외하고 스타일 통일 */
+        .header-nav { display: flex; align-items: center; width: 100%; margin-top: 10px; position: relative; }
+        .tabs { display: flex; justify-content: flex-end; gap: 15px; margin-left: auto; flex-wrap: wrap; }
+        .tab-item {
+            padding: 12px 30px; border-radius: 25px; background: rgba(255, 255, 255, 0.6);
+            text-decoration: none; color: #555; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.8);
+            transition: all 0.3s;
+        }
+        .tab-item.active { background: #fff; color: #3498db; border-color: #3498db; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .tab-item:hover { background: #fff; transform: translateY(-2px); }
+
+        /* 기업 정보 헤더 */
+        .company-info-header { margin-top: 48px; }
+        .company-info-header h1 { margin: 0; font-size: clamp(2rem, 4.2vw, 3.4rem); letter-spacing: -1px; font-weight: 800; color: #050505; }
+        .industry-text { margin: 10px 0 0; font-size: clamp(1.2rem, 2.2vw, 1.8rem); font-weight: 600; color: #767676; letter-spacing: -0.3px; }
+
+        /* 섹션 카드 외부 감싸개 */
+        .section-block { margin-top: 44px; }
+
+        /* 섹션 카드 공통 디자인 */
+        .card { 
+            background: #fff; border-radius: 20px; padding: 40px; margin-top: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 100%; box-sizing: border-box; /* border-box로 전체 너비 고정 */
+        }
+        .card-title { 
+            font-size: 1.5rem; font-weight: bold; margin: 0;
+            border-left: 6px solid #3498db; padding-left: 15px; /* 제목 앞에 파란색 세로 실선 줘서 포인트 주기 */
+        }
+
+        /* Finance 페이지 전용 추가 스타일 */
+        .chart-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* 좌측 차트, 우측 가격범위 */
+            gap: 40px;
+            align-items: start;
+        }
+
+        /* 우측 주가(기준일) 영역 스타일 */
+        .price-range-container { display: flex; flex-direction: column; gap: 30px; }
+        .price-title { font-size: 1.4rem; font-weight: bold; color: #222; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;}
+        .price-badge { font-size: 0.9rem; font-weight: bold; background: #eee; padding: 4px 12px; border-radius: 12px; color: #555; }
+        
+        .range-box { position: relative; margin-top: 10px; }
+        .range-labels { display: flex; justify-content: space-between; font-size: 1.1rem; margin-bottom: 8px; font-weight: bold;}
+        .range-values { display: flex; justify-content: space-between; font-size: 1.2rem; margin-bottom: 5px; color: #444; }
+        .range-bar-bg { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; position: relative; margin-top: 10px;}
+        .range-marker {
+            position: absolute; width: 16px; height: 16px; background: #007bff; border-radius: 50%;
+            top: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 2;
+        }
+        .marker-label {
+            position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
+            background: #007bff; color: #fff; padding: 4px 10px; border-radius: 4px;
+            font-size: 1.0rem; font-weight: bold; white-space: nowrap;
+        }
+        .marker-label::after {
+            content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            border-width: 5px; border-style: solid; border-color: transparent transparent #007bff transparent;
+        }
+        .missing-data-text { font-size: 1.1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
+
+        /* 하단 지표 2분할 레이아웃 */
+        .grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        
+        /* 개별 지표 카드 내부 스타일 */
+        .metric-item { display: flex; flex-direction: column; gap: 10px; }
+        .metric-badge { 
+            align-self: flex-start; border: 1px solid #333; border-radius: 20px; 
+            padding: 5px 20px; font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;
+        }
+        .metric-desc { font-size: 1.1rem; color: #555; line-height: 1.5; margin-bottom: 15px;}
+        
+        .metric-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 15px; margin-bottom: 10px;}
+        .metric-label { font-weight: bold; font-size: 1.1rem; color: #333; }
+        .metric-bar-wrap { display: flex; flex-direction: column; }
+        .metric-value-text { font-weight: bold; font-size: 1.1rem; margin-bottom: 5px; }
+        .bar-visual-bg { width: 100%; background: #eee; height: 10px; border-radius: 5px; overflow: hidden; }
+        .bar-visual-fill { height: 100%; border-radius: 5px; }
+        .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
+        .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="header-nav">
+        <a href="{% url 'home' %}" class="home-link">
+            <img src="{% static 'main/home_icon_final.png' %}" alt="홈으로 이동" class="home-icon">
+        </a>
+        <nav class="tabs">
+            <a href="#" class="tab-item">요약</a>
+            <a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
+            <a href="#" class="tab-item active">재무 정보</a>
+            <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
+        </nav>
+    </header>
+
+    <section class="company-info-header"> 
+        <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
+        <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
+    </section>
+
+    <section class="section-block">
+        <div class="card chart-layout">
+            <div style="min-width: 0;"> <!-- 차트 영역 최소 너비 보장 -->
+                <h3 style="margin-top:0;">동적 테이블(최근 90일)</h3>
+                <div id="candlestick-chart"></div>
+                <div id="volume-chart"></div>
+                <div style="font-size: 0.9rem; color:#888; margin-top:10px;">자료: 한국거래소 시장정보</div>
+            </div>
+
+            <div class="price-range-container">
+                <div class="price-title">주가(기준일) <span class="price-badge">{{ latest_stock.reference_date|date:"Y-m-d"|default:"데이터 없음" }} 종가</span></div>
+                
+                {% if latest_stock %}
+                    <div class="range-box">
+                        <div class="range-labels"><span>1일 최저가</span><span>1일 최고가</span></div>
+                        <div class="range-values"><span>{{ latest_stock.low_price|intcomma|default:"-" }}원</span><span>{{ latest_stock.high_price|intcomma|default:"-" }}원</span></div>
+                        <div class="range-bar-bg">
+                            <div class="range-marker" id="marker-1day" 
+                                data-low="{{ latest_stock.low_price }}" 
+                                data-high="{{ latest_stock.high_price }}" 
+                                data-close="{{ latest_stock.close_price }}">
+                                <div class="marker-label"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if latest_stock.wk52_low != None and latest_stock.wk52_high != None %}
+                    <div class="range-box" style="margin-top: 20px;">
+                        <div class="range-labels"><span>1년 최저가</span><span>1년 최고가</span></div>
+                        <div class="range-values"><span>{{ latest_stock.wk52_low|intcomma }}원</span><span>{{ latest_stock.wk52_high|intcomma }}원</span></div>
+                        <div class="range-bar-bg">
+                            <div class="range-marker" id="marker-1year" 
+                                data-low="{{ latest_stock.wk52_low }}" 
+                                data-high="{{ latest_stock.wk52_high }}" 
+                                data-close="{{ latest_stock.close_price }}">
+                                <div class="marker-label"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="missing-data-text">
+                        1년전 주가 데이터가 없어 최근 1년 변동률을 표시할 수 없습니다.
+                    </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </section>
+
+    <section class="section-block">
+        <h2 class="card-title">가치평가지표</h2>
+        <div class="card grid-2-col">
+            <div class="metric-item">
+                <div class="metric-badge">PER</div>
+                <div class="metric-desc">주가가 기업의 순이익 대비 몇 배로 거래되는지를 보여주는 지표입니다.</div>
+                
+                <div class="metric-row">
+                    <span class="metric-label">{{ company.corp_name }}</span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ latest_stock.per|default:"-" }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 70%;"></div></div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ peer_medians.per }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 40%;"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metric-item">
+                <div class="metric-badge">PBR</div>
+                <div class="metric-desc">주가가 기업의 순자산 대비 몇 배로 평가되는지를 보여주는 지표입니다.</div>
+                
+                <div class="metric-row">
+                    <span class="metric-label">{{ company.corp_name }}</span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ latest_stock.pbr|default:"-" }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 60%;"></div></div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ peer_medians.pbr }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 30%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-block">
+        <h2 class="card-title">배당 지표</h2>
+        <div class="card grid-2-col">
+            <div class="metric-item">
+                <div class="metric-badge">배당수익률</div>
+                <div class="metric-desc">투자가가 현재 주가 기준으로 받을 수 있는 배당 수준을 보여주는 지표입니다.</div>
+                
+                <div class="metric-row">
+                    <span class="metric-label">{{ company.corp_name }}</span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ latest_stock.dividend_yield|default:"-" }}%</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 80%;"></div></div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ peer_medians.dividend_yield }}%</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 45%;"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="metric-item">
+                <div class="metric-badge">배당 성향</div>
+                <div class="metric-desc">기업이 벌어들인 이익 중 얼마를 주주에게 배당하는지 보여주는 지표입니다.</div>
+                
+                <div class="metric-row">
+                    <span class="metric-label">{{ company.corp_name }}</span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ company_payout }}</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 65%;"></div></div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{% if peer_medians.payout_ratio != '-' %}{{ peer_medians.payout_ratio }}%{% else %}-{% endif %}</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 35%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+{{ chart_data_json|json_script:"chart-data" }}
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. 차트 데이터 로드
+    const rawData = JSON.parse(document.getElementById('chart-data').textContent);
+    
+    if (rawData && rawData.length > 0) {
+        // 1. 공통 데이터 전처리
+        // 캔들 차트 포맷: {x: 날짜문자열, y: [시가, 고가, 저가, 종가]}
+        const candleSeriesData = rawData.map(item => {
+            return {
+                x: item.date,
+                y: [item.open, item.high, item.low, item.close]
+            };
+        });
+
+        // 거래량 차트 포맷: {x: 날짜문자열, y: 거래량, tradingValue: 거래대금}
+        const volumeSeriesData = rawData.map(item => {
+            return {
+                x: item.date,
+                y: item.volume,
+                tradingValue: item.trading_value || 0
+            };
+        });
+
+        // 2. 캔들 차트 설정 (상단)
+        var candleOptions = {
+            series: [{ name: '주가', data: candleSeriesData }],
+            chart: {
+                type: 'candlestick',
+                height: 290,
+                id: 'candles',
+                toolbar: { show: false }, // 도구 숨김
+            },
+            plotOptions: {
+                candlestick: {
+                    colors: { upward: '#ef5350', downward: '#2196f3' } // 상승: 빨강, 하락: 파랑
+                }
+            },
+            xaxis: { 
+                type: 'category', 
+                labels: { show: false }, 
+                axisBorder: { show: false }
+            },
+            yaxis: { tooltip: { enabled: false }, labels: { formatter: (val) => Math.round(val).toLocaleString() } },
+            tooltip: {
+                enabled: true,
+                custom: function({seriesIndex, dataPointIndex, w}) {
+                    const o = w.globals.seriesCandleO[seriesIndex][dataPointIndex];
+                    const h = w.globals.seriesCandleH[seriesIndex][dataPointIndex];
+                    const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
+                    const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
+                    const dataObj = candleSeriesData[dataPointIndex];
+                    if(o === undefined || !dataObj) return '';
+                    
+                    const dateStr = dataObj.x;
+                    
+                    return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 150px;">
+                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
+                        <div style="display:flex; justify-content:space-between;"><span>시가</span> <b style="color: #000;">${o.toLocaleString()}</b></div>
+                        <div style="display:flex; justify-content:space-between;"><span>고가</span> <b style="color: #000;">${h.toLocaleString()}</b></div>
+                        <div style="display:flex; justify-content:space-between;"><span>저가</span> <b style="color: #000;">${l.toLocaleString()}</b></div>
+                        <div style="display:flex; justify-content:space-between;"><span>종가</span> <b style="color: #000;">${c.toLocaleString()}</b></div>
+                    </div>`;
+                }
+            },
+            grid: { padding: { left: 10, right: 10 } }
+        };
+        var candleChart = new ApexCharts(document.querySelector("#candlestick-chart"), candleOptions);
+        candleChart.render();
+
+        const vols = volumeSeriesData.map(d => d.y);
+        const minVol = Math.min(...vols);
+        const yaxisMin = Math.floor(minVol * 0.9);
+
+        // 3. 거래량 바 차트 설정 (하단)
+        var volumeOptions = {
+            series: [{ name: '거래량', data: volumeSeriesData }],
+            chart: {
+                type: 'bar',
+                height: 120,
+                brush: { enabled: true, target: 'candles', autoScaleYaxis: true },
+                selection: { enabled: true },
+                toolbar: { show: false }
+            },
+            colors: ['#999999'], // 단일 회색
+            dataLabels: { enabled: false },
+            plotOptions: { bar: { columnWidth: '80%' } },
+            legend: { show: false }, 
+            xaxis: { 
+                type: 'category', 
+                axisTicks: { show: false },
+                labels: { 
+                    formatter: (val) => {
+                        if (!val) return '';
+                        const index = volumeSeriesData.findIndex(item => item.x === val);
+                        const total = volumeSeriesData.length;
+                        
+                        // 처음, 마지막, 그리고 중간중간
+                        const gap = Math.max(1, Math.floor(total / 4));
+                        
+                        if (index === 0 || index === total - 1) {
+                            const dateParts = val.split('-');
+                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
+                            return val;
+                        } else if (index % gap === 0) {
+                            // 중간 라벨이 끝부분 라벨들과 너무 가까우면 안 그림
+                            if (index < gap / 2 || (total - 1 - index) < gap / 2) return '';
+                            
+                            const dateParts = val.split('-');
+                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
+                            return val;
+                        }
+                        return '';
+                    }
+                }
+            },
+            yaxis: {
+                min: yaxisMin,
+                labels: {
+                    show: true,
+                    formatter: (val) => {
+                        // 금액 단위 줄이기 K, M 등
+                        if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+                        if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
+                        return Math.round(val).toLocaleString();
+                    },
+                    style: { fontSize: '10px', colors: '#888' }
+                }
+            },
+            tooltip: {
+                enabled: true,
+                custom: function({seriesIndex, dataPointIndex, w}) {
+                    const data = volumeSeriesData[dataPointIndex];
+                    if(!data) return '';
+                    const dateStr = data.x;
+                    const vol = data.y;
+                    const val = data.tradingValue;
+                    
+                    return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 200px;">
+                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;"><span>거래량</span> <b style="color: #000;">${vol.toLocaleString()}</b></div>
+                        <div style="display:flex; justify-content:space-between;"><span>거래대금</span> <b style="color: #000;">${val.toLocaleString()}</b></div>
+                    </div>`;
+                }
+            },
+            grid: { padding: { left: 15, right: 15 } }
+        };
+        var volumeChart = new ApexCharts(document.querySelector("#volume-chart"), volumeOptions);
+        volumeChart.render();
+    }
+
+
+    // 4. 우측 주가(기준일) 파란색 마커 위치 계산
+    function setMarkerPosition(elementId) {
+        const marker = document.getElementById(elementId);
+        if (!marker) return;
+
+        const lowStr = marker.getAttribute('data-low') || '';
+        const highStr = marker.getAttribute('data-high') || '';
+        const closeStr = marker.getAttribute('data-close') || '';
+
+        const low = parseFloat(lowStr.replace(/,/g, ''));
+        const high = parseFloat(highStr.replace(/,/g, ''));
+        const close = parseFloat(closeStr.replace(/,/g, ''));
+
+        if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high > low) {
+            // (종가 - 저가) / (고가 - 저가) * 100 으로 퍼센티지 산출
+            let percentage = ((close - low) / (high - low)) * 100;
+            // 마커가 바깥으로 안 나가게 0~100 사이 보정
+            percentage = Math.max(0, Math.min(100, percentage)); 
+            
+            // 왼쪽 0%, 오른쪽 100% 위치 지정
+            marker.style.left = percentage + "%";
+            
+            const label = marker.querySelector('.marker-label');
+            if (label) {
+                label.textContent = close.toLocaleString() + '원';
+            }
+        } else if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high === low) {
+            // 고가와 저가가 같다면 중간에 마커 표시
+            marker.style.left = "50%";
+            
+            const label = marker.querySelector('.marker-label');
+            if (label) {
+                label.textContent = close.toLocaleString() + '원';
+            }
+        } else {
+            marker.style.display = "none"; // 데이터가 이상하면 마커 숨김
+        }
+    }
+
+    setMarkerPosition('marker-1day');
+    setMarkerPosition('marker-1year');
+});
+</script>
+</body>
+</html>

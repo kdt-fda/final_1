@@ -15,7 +15,7 @@ def create_basic(conn):
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS basic (
+                CREATE TABLE IF NOT EXISTS BASIC (
                     stock_code VARCHAR(10) PRIMARY KEY,
                     corp_code VARCHAR(15),
                     corp_name VARCHAR(100),
@@ -29,7 +29,7 @@ def create_basic(conn):
                     ON DELETE SET NULL ON UPDATE CASCADE
                 );
             """) # updated_at 에서 데이터 수정시간 확인 가능
-            print("basic 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
+            print("BASIC 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
 
     except Exception as e:
         # 오류 발생 시 롤백
@@ -55,7 +55,7 @@ def upload_to_basic():
 
             # 삽입 및 업데이트 => 만약 중복된 키가 발견되면(기본키인 stock_code) 삽입 대신 업데이트
             sql = """
-                INSERT INTO basic (stock_code, corp_code, corp_name, est_dt, ipo, ind_code, is_active)
+                INSERT INTO BASIC (stock_code, corp_code, corp_name, est_dt, ipo, ind_code, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s, TRUE)
                 ON DUPLICATE KEY UPDATE
                     corp_code = VALUES(corp_code),
@@ -76,7 +76,7 @@ def upload_to_basic():
                 
                 # 최신 리스트에 없는데 활성화 되어있는 데이터만 비활성화
                 sql_soft_delete = f"""
-                    UPDATE basic 
+                    UPDATE BASIC 
                     SET is_active = FALSE 
                     WHERE stock_code NOT IN ({format_strings}) AND is_active = TRUE;
                 """
@@ -87,7 +87,7 @@ def upload_to_basic():
             
             # 변경사항 확정
             conn.commit()
-            print(f"basic table에 적재 완료 ({len(data_to_insert)}건)")
+            print(f"BASIC table에 적재 완료 ({len(data_to_insert)}건)")
             print(f"상장폐지 등 크롤링 누락 기업 비활성화(Soft Delete) 처리 완료: {soft_deleted_count}건")
 
     except Exception as e:
