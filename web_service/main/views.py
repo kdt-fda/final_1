@@ -1,4 +1,6 @@
 ﻿from django.shortcuts import render, get_object_or_404, redirect
+from datetime import date, timedelta
+import statistics
 import json
 from django.db.models import OuterRef, Subquery
 from django.db.utils import OperationalError, ProgrammingError
@@ -58,8 +60,119 @@ def ai_page(request, stock_code):
 def overview(request):
     return render(request, 'overview.html')
 
-def finance(request):
-    return render(request, 'finance.html')
+def finance(request, stock_code=None):
+    if not stock_code:
+        # URL에 stock_code가 없을 경우 안전장치
+        company = Basic.objects.filter(is_active=True).first()
+        if company:
+            stock_code = company.stock_code
+        else:
+            return render(request, 'finance.html')
+
+    company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
+
+    # 날짜 계산: 어제 날짜 기준으로 가장 최근 개장일 찾기
+    today = date.today() 
+    yesterday = today - timedelta(days=1)
+
+    # 최신 데이터 (어제 이하 기준 가장 최근)
+    latest_stock = CompanyStock.objects.filter(
+        stock_code=stock_code,
+        reference_date__lte=yesterday
+    ).order_by('-reference_date').first()
+
+    base_date = latest_stock.reference_date if latest_stock else yesterday
+    ninety_days_ago = base_date - timedelta(days=90)
+
+    # 차트용 데이터 (90일 전 ~ 기준일), 날짜 오름차순(과거->최신)
+    stock_qs = CompanyStock.objects.filter(
+        stock_code=stock_code,
+        reference_date__gte=ninety_days_ago,
+        reference_date__lte=base_date
+    ).order_by('reference_date')
+
+    chart_data = []
+    for row in stock_qs:
+        # open_price가 결측치인 경우 시고저종 캔들차트 생성을 위해 close_price로 대체
+        o_price = float(row.open_price) if row.open_price else (float(row.close_price) if row.close_price else 0)
+        h_price = float(row.high_price) if row.high_price else o_price
+        l_price = float(row.low_price) if row.low_price else o_price
+        c_price = float(row.close_price) if row.close_price else o_price
+
+        chart_data.append({
+            'date': row.reference_date.strftime('%Y-%m-%d'),
+            'open': o_price,
+            'high': h_price,
+            'low': l_price,
+            'close': c_price,
+            'volume': float(row.acc_trdvol) if row.acc_trdvol else 0,
+            'trading_value': float(row.acc_trdval) if row.acc_trdval else 0,
+        })
+
+    # 피어그룹 중앙값 계산 및 배당성향 계산 로직
+    peer_codes = Basic.objects.filter(ind_code=company.ind_code, is_active=True).values_list('stock_code', flat=True)
+    
+    per_list, pbr_list, div_list, payout_list = [], [], [], []
+
+    for code in peer_codes:
+        peer_stock = CompanyStock.objects.filter(
+            stock_code=code, 
+            reference_date__lte=yesterday
+        ).order_by('-reference_date').first()
+
+        if peer_stock:
+            p_eps = float(peer_stock.eps) if peer_stock.eps is not None else None
+            p_dps = float(peer_stock.dps) if peer_stock.dps is not None else None
+
+            # EPS가 양수인 기업들 중에서만 중앙값을 계산
+            if p_eps is not None and p_eps > 0:
+                if peer_stock.per is not None: per_list.append(float(peer_stock.per))
+                if peer_stock.pbr is not None: pbr_list.append(float(peer_stock.pbr))
+                if peer_stock.dividend_yield is not None: div_list.append(float(peer_stock.dividend_yield))
+                
+                if p_dps is not None:
+                    payout_list.append((p_dps / p_eps) * 100)
+
+    def get_median(lst):
+        return f"{round(statistics.median(lst), 1)}" if lst else '-'
+
+    peer_count = len(peer_codes) # 전체 피어의 개수 기준
+
+    peer_medians = {
+        'per': get_median(per_list),
+        'pbr': get_median(pbr_list),
+        'dividend_yield': get_median(div_list),
+        'payout_ratio': get_median(payout_list),
+        'count': peer_count
+    }
+
+    # 현재 기업 배당성향 포맷팅 로직
+    company_payout = '-'
+    if latest_stock:
+        eps = float(latest_stock.eps) if latest_stock.eps is not None else None
+        dps = float(latest_stock.dps) if latest_stock.dps is not None else None
+        
+        if eps is not None and eps < 0:
+            company_payout = 'N/A'
+        elif dps is not None and dps == 0:
+            company_payout = '-'
+        elif eps is not None and dps is not None and eps > 0:
+            company_payout = f"{round((dps / eps) * 100, 1)}%"
+
+    # 최신 데이터 라운딩 처리
+    if latest_stock:
+        if latest_stock.per is not None: latest_stock.per = f"{float(latest_stock.per):.1f}"
+        if latest_stock.pbr is not None: latest_stock.pbr = f"{float(latest_stock.pbr):.1f}"
+        if latest_stock.dividend_yield is not None: latest_stock.dividend_yield = f"{float(latest_stock.dividend_yield):.1f}"
+
+    context = {
+        'company': company,
+        'latest_stock': latest_stock,
+        'chart_data_json': chart_data,
+        'peer_medians': peer_medians,
+        'company_payout': company_payout,
+    }
+    return render(request, 'finance.html', context)
 
 def industry(request, stock_code=None):
     def to_float(value):
