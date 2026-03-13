@@ -97,6 +97,9 @@ def login_krx(login_id: str, login_pw: str) -> bool:
     resp = _krx_session.post(_LOGIN_URL, data=payload, headers=headers, timeout=15)
     data = resp.json()
     error_code = data.get("_error_code", "")
+    
+    if error_code != "CD001":
+        print(f"\n[디버깅] KRX 로그인 거절 응답 데이터: {data}\n")
 
     # CD011 중복 로그인 처리
     if error_code == "CD011":
@@ -106,3 +109,63 @@ def login_krx(login_id: str, login_pw: str) -> bool:
         error_code = data.get("_error_code", "")
 
     return error_code == "CD001"
+
+
+# krx 안될 경우 대체 코드(krx)
+# def login_krx(login_id: str, login_pw: str) -> bool:
+    
+#     global _krx_session
+    
+#     # 기존 세션 초기화 (꼬임 방지)
+#     _krx_session.cookies.clear()
+
+#     _UA = (
+#         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+#         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+#     )
+
+#     # 메인 페이지 접속으로 유효한 기본 쿠키(JSESSIONID 등) 먼저 획득
+#     main_url = "https://data.krx.co.kr/main/main.jsp"
+#     _krx_session.get(main_url, headers={"User-Agent": _UA}, timeout=15)
+
+#     _LOGIN_PAGE = "https://data.krx.co.kr/contents/MDC/COMS/client/MDCCOMS001.cmd"
+#     _LOGIN_URL  = "https://data.krx.co.kr/contents/MDC/COMS/client/MDCCOMS001D1.cmd"
+
+#     # 로그인 페이지로 리퍼러 설정하여 세션 유지 확인
+#     _krx_session.get(_LOGIN_PAGE, headers={"User-Agent": _UA, "Referer": main_url}, timeout=15)
+
+#     payload = {
+#         "mbrNm": "", "telNo": "", "di": "", "certType": "",
+#         "mbrId": login_id, "pw": login_pw,
+#     }
+    
+#     # 로그인 요청 시 헤더 강화 (Origin 및 X-Requested-With 추가)
+#     headers = {
+#         "User-Agent": _UA, 
+#         "Referer": _LOGIN_PAGE,
+#         "Origin": "https://data.krx.co.kr",
+#         "X-Requested-With": "XMLHttpRequest"
+#     }
+
+#     # 로그인 POST
+#     resp = _krx_session.post(_LOGIN_URL, data=payload, headers=headers, timeout=15)
+    
+#     try:
+#         data = resp.json()
+#     except Exception:
+#         print(f"JSON 파싱 실패: {resp.text}")
+#         return False
+
+#     error_code = data.get("_error_code", "")
+
+#     # CD011 중복 로그인 처리
+#     if error_code == "CD011":
+#         payload["skipDup"] = "Y"
+#         resp = _krx_session.post(_LOGIN_URL, data=payload, headers=headers, timeout=15)
+#         data = resp.json()
+#         error_code = data.get("_error_code", "")
+
+#     if error_code != "CD001":
+#         print(f"[로그인 실패] 코드: {error_code}, 메시지: {data.get('_error_message', '알 수 없음')}")
+
+#     return error_code == "CD001"
