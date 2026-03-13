@@ -144,6 +144,7 @@ def empty_feature_frame() -> pd.DataFrame:
             "inst_netbuy_value",
             "per",
             "pbr",
+            "mkt_cap",
         ]
     )
 
@@ -179,6 +180,7 @@ def create_feature_raw(conn):
                 inst_netbuy_value DECIMAL(24,6),
                 per DECIMAL(24,6),
                 pbr DECIMAL(24,6),
+                mkt_cap DECIMAL(24,6),
                 CONSTRAINT fk_feature_raw_feature_basic
                     FOREIGN KEY (stock_code, date)
                     REFERENCES FEATURE_BASIC (stock_code, date)
@@ -188,130 +190,6 @@ def create_feature_raw(conn):
             """
         )
     log("FEATURE_RAW 테이블이 생성되었거나 이미 존재합니다.")
-
-
-def ensure_feature_raw_unique_key(conn):
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS cnt
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-              AND table_name = 'FEATURE_RAW'
-              AND index_name = 'uq_feature_raw_stock_date';
-            """
-        )
-        row = cursor.fetchone()
-        exists = int(row["cnt"]) > 0
-        if not exists:
-            cursor.execute(
-                """
-                ALTER TABLE FEATURE_RAW
-                ADD UNIQUE KEY uq_feature_raw_stock_date (stock_code, date);
-                """
-            )
-            log("FEATURE_RAW 고유키(uq_feature_raw_stock_date) 생성 완료")
-
-
-def ensure_feature_raw_decimal_capacity(conn):
-    target_cols = [
-        "close",
-        "trading_value",
-        "foreign_netbuy_value",
-        "inst_netbuy_value",
-        "per",
-        "pbr",
-    ]
-
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT column_name, numeric_precision, numeric_scale
-            FROM information_schema.columns
-            WHERE table_schema = DATABASE()
-              AND table_name = 'FEATURE_RAW'
-              AND column_name IN (
-                  'close',
-                  'trading_value',
-                  'foreign_netbuy_value',
-                  'inst_netbuy_value',
-                  'per',
-                  'pbr'
-              );
-            """
-        )
-        rows = cursor.fetchall()
-
-        width_map = {row["column_name"]: row for row in rows}
-        to_modify = []
-        for col in target_cols:
-            row = width_map.get(col)
-            if row is None:
-                continue
-            prec = int(row["numeric_precision"]) if row["numeric_precision"] is not None else 0
-            scale = int(row["numeric_scale"]) if row["numeric_scale"] is not None else 0
-            if prec < 24 or scale < 6:
-                to_modify.append(col)
-
-        if not to_modify:
-            return
-
-        alter_sql = "ALTER TABLE FEATURE_RAW " + ", ".join(
-            [f"MODIFY COLUMN `{col}` DECIMAL(24,6)" for col in to_modify]
-        )
-        cursor.execute(alter_sql)
-        log(f"FEATURE_RAW decimal columns widened: {', '.join(to_modify)}")
-
-
-def ensure_feature_raw_foreign_key(conn):
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS cnt
-            FROM information_schema.table_constraints
-            WHERE table_schema = DATABASE()
-              AND table_name = 'FEATURE_RAW'
-              AND constraint_type = 'FOREIGN KEY'
-              AND constraint_name = 'fk_feature_raw_feature_basic';
-            """
-        )
-        row = cursor.fetchone()
-        exists = int(row["cnt"]) > 0
-        if not exists:
-            cursor.execute(
-                """
-                ALTER TABLE FEATURE_RAW
-                ADD CONSTRAINT fk_feature_raw_feature_basic
-                    FOREIGN KEY (stock_code, date)
-                    REFERENCES FEATURE_BASIC (stock_code, date)
-                    ON UPDATE CASCADE
-                    ON DELETE RESTRICT;
-                """
-            )
-            log("FEATURE_RAW FK(fk_feature_raw_feature_basic) created")
-
-
-def ensure_feature_basic_lookup_index(conn):
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT COUNT(*) AS cnt
-            FROM information_schema.statistics
-            WHERE table_schema = DATABASE()
-              AND table_name = "FEATURE_BASIC"
-              AND index_name = "idx_feature_basic_date_stock";
-            """
-        )
-        row = cursor.fetchone()
-        exists = int(row["cnt"]) > 0
-        if not exists:
-            cursor.execute(
-                """
-                ALTER TABLE FEATURE_BASIC
-                ADD INDEX idx_feature_basic_date_stock (date, stock_code);
-                """
-            )
-            log("FEATURE_BASIC index(idx_feature_basic_date_stock) created")
 
 
 def load_feature_basic_stock_ranges(
@@ -530,20 +408,26 @@ def collect_single_ticker(
     base = pd.DataFrame(index=ohlcv.index.copy())
     base["close"] = pd.to_numeric(ohlcv.get("종가"), errors="coerce")
 
+    t_cap = _stage_start("MarketCap")
+    cap_df = safe_pykrx_call(stock.get_market_cap_by_date, from_dt, to_dt, stock_code)
+    _stage_done("MarketCap", t_cap, f"rows={len(cap_df)}")
+
+    mkt_cap_col = pick_first_existing_col(cap_df, ["시가총액", "MKT_CAP", "mkt_cap"])
+    if (not cap_df.empty) and mkt_cap_col:
+        base["mkt_cap"] = pd.to_numeric(cap_df[mkt_cap_col], errors="coerce").reindex(base.index)
+    else:
+        base["mkt_cap"] = np.nan
+
     trading_value_series = ohlcv.get("거래대금")
     if trading_value_series is not None:
         base["trading_value"] = pd.to_numeric(trading_value_series, errors="coerce")
+    elif (not cap_df.empty) and ("거래대금" in cap_df.columns):
+        base["trading_value"] = pd.to_numeric(
+            cap_df["거래대금"], errors="coerce"
+        ).reindex(base.index)
     else:
-        t_cap = _stage_start("MarketCapFallback")
-        cap_df = safe_pykrx_call(stock.get_market_cap_by_date, from_dt, to_dt, stock_code)
-        _stage_done("MarketCapFallback", t_cap, f"rows={len(cap_df)}")
-        if (not cap_df.empty) and ("거래대금" in cap_df.columns):
-            base["trading_value"] = pd.to_numeric(
-                cap_df["거래대금"], errors="coerce"
-            ).reindex(base.index)
-        else:
-            volume_series = pd.to_numeric(ohlcv.get("거래량"), errors="coerce")
-            base["trading_value"] = base["close"] * volume_series
+        volume_series = pd.to_numeric(ohlcv.get("거래량"), errors="coerce")
+        base["trading_value"] = base["close"] * volume_series
 
     t_investor = _stage_start("InvestorTradingValue")
     investor = safe_pykrx_call(
@@ -646,6 +530,7 @@ def upsert_feature_raw(conn, df: pd.DataFrame) -> int:
                 to_sql_value(row["inst_netbuy_value"]),
                 to_sql_value(row["per"]),
                 to_sql_value(row["pbr"]),
+                to_sql_value(row["mkt_cap"]),
             )
         )
 
@@ -658,15 +543,17 @@ def upsert_feature_raw(conn, df: pd.DataFrame) -> int:
             foreign_netbuy_value,
             inst_netbuy_value,
             per,
-            pbr
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            pbr,
+            mkt_cap
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
             close = VALUES(close),
             trading_value = VALUES(trading_value),
             foreign_netbuy_value = VALUES(foreign_netbuy_value),
             inst_netbuy_value = VALUES(inst_netbuy_value),
             per = VALUES(per),
-            pbr = VALUES(pbr);
+            pbr = VALUES(pbr),
+            mkt_cap = VALUES(mkt_cap);
     """
 
     with conn.cursor() as cursor:
@@ -687,6 +574,7 @@ def cleanup_feature_basic_missing_dates_for_collected_stocks(conn) -> int:
                OR inst_netbuy_value IS NOT NULL
                OR per IS NOT NULL
                OR pbr IS NOT NULL
+               OR mkt_cap IS NOT NULL
         ) ds ON ds.stock_code = fb.stock_code
         LEFT JOIN FEATURE_RAW fr
           ON fr.stock_code = fb.stock_code
@@ -719,6 +607,7 @@ def cleanup_feature_basic_missing_dates_for_stock_if_collected(conn, stock_code:
                     OR fr2.inst_netbuy_value IS NOT NULL
                     OR fr2.per IS NOT NULL
                     OR fr2.pbr IS NOT NULL
+                    OR fr2.mkt_cap IS NOT NULL
                 )
           );
     """
@@ -768,10 +657,6 @@ def main():
     try:
         if not args.dry_run:
             create_feature_raw(conn)
-            ensure_feature_raw_unique_key(conn)
-            ensure_feature_raw_decimal_capacity(conn)
-            ensure_feature_basic_lookup_index(conn)
-            ensure_feature_raw_foreign_key(conn)
 
         resume_mode = (not args.no_resume) and (not args.dry_run)
         if resume_mode:
