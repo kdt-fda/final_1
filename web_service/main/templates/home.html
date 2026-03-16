@@ -58,6 +58,7 @@
         .fluct { font-size: 0.95rem; margin-top: 3px; display: block; } /* 등락정보 스타일 */
         .up { color: #e74c3c; } /* 빨간색 */
         .down { color: #3498db; } /* 파란색 */
+        .flat { color: #888888; } /* 회색 */
     </style>
 </head>
 <body>
@@ -79,44 +80,24 @@
     <div class="top10-section">
         <h3>거래대금 TOP 10</h3>
         <div class="top10-grid">
-            <a href="{% url 'ai_page' '037440' %}" class="stock-item">
-                <span class="rank">1</span>
-                <span class="corp-name">미래에셋벤처투자</span>
+            {% for stock in top_stocks %}
+            <a href="{% url 'ai_page' stock.code %}" class="stock-item"> <!-- 나중에 요약 페이지로 이동하게 수정하기 -->
+                <span class="rank">{{ forloop.counter }}</span>
+                <span class="corp-name">{{ stock.name }}</span>
                 <div class="price-box">
-                    <span class="price">22,100</span>
-                    <span class="fluct up">+5,100 (30.00%)</span>
+                    <span class="price">{{ stock.price }}</span>
+                    <span class="fluct {{ stock.css_class }}"> <!-- 여기서 views.py에서 계산한 up, down, flat이 들어감 -->
+                        {{ stock.change_text }}
+                    </span>
                 </div>
             </a>
-
-            <a href="{% url 'ai_page' '005930' %}" class="stock-item">
-                <span class="rank">2</span>
-                <span class="corp-name">삼성전자</span>
-                <div class="price-box">
-                    <span class="price">166,900</span>
-                    <span class="fluct up">+16,500 (10.97%)</span>
-                </div>
-            </a>
+            {% empty %} <!-- 테이블 비었거나 조회안되는 경우 -->
+            <div style="grid-column: span 2; text-align: center; color: #888; padding: 20px;">
+                현재 거래 데이터를 불러올 수 없습니다.
             </div>
+            {% endfor %}
+        </div>
     </div>
-</div>
 
 </body>
 </html>
-
-
-<!-- 나중에 이걸로 수정 -->
-<!-- <div class="top10-grid">
-    {% for stock in stocks %}
-    <a href="{% url 'ai_page' stock.code %}" class="stock-item">
-        <span class="rank">{{ forloop.counter }}</span>
-        <span class="corp-name">{{ stock.name }}</span>
-        <div class="price-box">
-            <span class="price">{{ stock.price }}</span>
-            <span class="fluct {% if stock.change > 0 %}up{% elif stock.change < 0 %}down{% endif %}">
-                {% if stock.change > 0 %}+{% endif %}{{ stock.change }}
-                ({{ stock.change_rate }}%)
-            </span>
-        </div>
-    </a>
-    {% endfor %}
-</div> -->

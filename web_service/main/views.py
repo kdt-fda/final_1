@@ -9,7 +9,52 @@ from .models import Basic, BokIo, CompanyStock, IndBok, IndIo, Report
 
 def home(request):
     count = Report.objects.count()
-    return render(request, 'home.html', {'count': count})
+    top_stocks = []
+
+    # 활성화된 기업의 stock_code만 리스트로 쫙 뽑아옴
+    active_codes = list(Basic.objects.filter(is_active=True).values_list('stock_code', flat=True))
+
+    if active_codes:
+        # 가장 최근 거래일 찾기
+        latest_stock = CompanyStock.objects.order_by('-reference_date').first()
+        
+        if latest_stock:
+            # 거래대금(bas_trdval) 기준 내림차순 10개 추출
+            top_10_qs = CompanyStock.objects.filter(reference_date=latest_stock.reference_date, stock_code__in=active_codes).order_by('-bas_trdval')[:10]
+            
+            for stock in top_10_qs:
+                # 이름 찾기 로직
+                raw_code = getattr(stock, 'stock_code_id', stock.stock_code) # 해당 주식의 stock_code 가져옴
+                stock_code_str = str(raw_code).strip() # stock_code 문자열 변환 후 좌우 공백 다듬기
+                
+                # DB에서 이름 직접 가져오기
+                company = Basic.objects.filter(stock_code=stock_code_str).first()
+                company_name = company.corp_name if company else '이름 없음'
+
+                # 가격 및 등락률 텍스트/색상 가공
+                try:
+                    price_change = int(stock.price_change) if stock.price_change else 0
+                    change_rate = float(stock.fluc_rt) if stock.fluc_rt else 0.0
+                    close_price = int(stock.close_price) if stock.close_price else 0
+                except (ValueError, TypeError):
+                    price_change, change_rate, close_price = 0, 0.0, 0
+
+                if price_change > 0:
+                    css_class, sign = 'up', '+'
+                elif price_change < 0:
+                    css_class, sign = 'down', '' # 음수는 이미 -가 붙어 있음
+                else:
+                    css_class, sign = 'flat', ''
+
+                top_stocks.append({
+                    'code': stock_code_str,
+                    'name': company_name,
+                    'price': f"{close_price:,}",
+                    'change_text': f"{sign}{price_change:,} ({change_rate:.2f}%)",
+                    'css_class': css_class
+                })
+
+    return render(request, 'home.html', {'count': count, 'top_stocks': top_stocks})
 
 def search(request):
     query = request.GET.get('q', '')
