@@ -445,6 +445,11 @@
             padding: 5px 20px; font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;
             background: #fff; box-shadow: 0 0 24px rgba(17, 24, 39, 0.10);
         }
+        .metric-badge.is-warning {
+            background: #fff2bf;
+            color: #7d5d12;
+            box-shadow: 0 0 24px rgba(157, 125, 30, 0.14);
+        }
         .metric-desc {
             font-size: 1.1rem;
             color: #555;
@@ -453,6 +458,9 @@
             white-space: normal;
             word-break: keep-all;
             overflow-wrap: break-word;
+        }
+        .metric-desc.is-warning {
+            color: #7d5d12;
         }
         
         .metric-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 15px; margin-bottom: 10px;}
@@ -463,6 +471,7 @@
         .bar-visual-fill { height: 100%; border-radius: 5px; }
         .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
         .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
+        #volume-chart .apexcharts-selection-rect { cursor: grab; }
 
         @media (max-width: 960px) {
             .container { padding: 32px 24px 48px; }
@@ -516,14 +525,15 @@
         {% if latest_stock and chart_data_json %}
         <div class="card chart-layout">
             <div class="chart-panel">
-                <div class="chart-panel-header">
-                    <div class="chart-period-tabs" role="group" aria-label="차트 기간 선택">
-                        <button type="button" class="chart-period-button" data-period="7" aria-pressed="false">7일</button>
-                        <button type="button" class="chart-period-button" data-period="15" aria-pressed="false">15일</button>
-                        <button type="button" class="chart-period-button" data-period="30" aria-pressed="false">30일</button>
-                        <button type="button" class="chart-period-button" data-period="60" aria-pressed="false">60일</button>
+                    <div class="chart-panel-header">
+                        <div class="chart-period-tabs" role="group" aria-label="차트 기간 선택">
+                            <button type="button" class="chart-period-button" data-period="7" aria-pressed="false">7일</button>
+                            <button type="button" class="chart-period-button" data-period="15" aria-pressed="false">15일</button>
+                            <button type="button" class="chart-period-button" data-period="30" aria-pressed="false">30일</button>
+                            <button type="button" class="chart-period-button" data-period="60" aria-pressed="false">60일</button>
+                            <button type="button" class="chart-period-button" data-period="90" aria-pressed="false">90일</button>
+                        </div>
                     </div>
-                </div>
                 <div id="candlestick-chart"></div>
                 <div id="volume-chart"></div>
 
@@ -637,9 +647,13 @@
         <h2 class="card-title">가치평가지표</h2>
         <div class="card grid-2-col">
             <div class="metric-item">
+                {% if valuation_alerts.per_is_net_loss %}
+                <div class="metric-badge is-warning">당기순손실</div>
+                <div class="metric-desc is-warning">[주의] 당기순손실이 발생하는 기업입니다.</div>
+                {% else %}
                 <div class="metric-badge">PER</div>
                 <div class="metric-desc">주가가 기업의 순이익 대비 몇 배로 거래되는지를 보여주는 지표</div>
-                
+
                 <div class="metric-row">
                     <span class="metric-label">{{ company.corp_name }}</span>
                     <div class="metric-bar-wrap">
@@ -654,12 +668,17 @@
                         <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 40%;"></div></div>
                     </div>
                 </div>
+                {% endif %}
             </div>
 
             <div class="metric-item">
+                {% if valuation_alerts.pbr_is_complete_capital_impairment %}
+                <div class="metric-badge is-warning">완전자본잠식</div>
+                <div class="metric-desc is-warning">[주의] 완전자본잠식 상태로, 누적 손실로 인해 부채가 자산을 초과합니다.</div>
+                {% else %}
                 <div class="metric-badge">PBR</div>
                 <div class="metric-desc">주가가 기업의 순자산 대비 몇 배로 평가되는지를 보여주는 지표</div>
-                
+
                 <div class="metric-row">
                     <span class="metric-label">{{ company.corp_name }}</span>
                     <div class="metric-bar-wrap">
@@ -674,6 +693,7 @@
                         <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 30%;"></div></div>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -734,7 +754,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const competitivenessDataElement = document.getElementById('competitiveness-radar-data');
     const competitivenessRadarData = competitivenessDataElement ? JSON.parse(competitivenessDataElement.textContent) : null;
     const periodButtons = Array.from(document.querySelectorAll('.chart-period-button'));
-    const maxWindowDays = 60;
+    const maxWindowDays = 90;
     const maxData = rawData.slice(-Math.min(maxWindowDays, rawData.length));
     const companyName = "{{ company.corp_name|escapejs }}";
     let candleChart = null;
@@ -742,6 +762,7 @@ document.addEventListener("DOMContentLoaded", function() {
     let isApplyingPreset = false;
     let isSyncingViewport = false;
     let isSyncingBrushSelection = false;
+    let currentViewportRange = null;
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -755,6 +776,55 @@ document.addEventListener("DOMContentLoaded", function() {
     function formatCompetitivenessScore(value) {
         const numericValue = Number(value);
         return Number.isFinite(numericValue) ? `${numericValue.toFixed(1)}점` : '-';
+    }
+
+    function parseMetricNumericValue(text) {
+        const normalizedText = String(text ?? '')
+            .replace(/,/g, '')
+            .trim();
+        const match = normalizedText.match(/-?\d+(?:\.\d+)?/);
+        if (!match) return null;
+
+        const numericValue = Number(match[0]);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    }
+
+    function updateMetricBars() {
+        document.querySelectorAll('.metric-item').forEach(metricItem => {
+            const metricRows = Array.from(metricItem.querySelectorAll('.metric-row'));
+            if (!metricRows.length) return;
+
+            const rowData = metricRows.map(row => {
+                const valueText = row.querySelector('.metric-value-text')?.textContent ?? '';
+                const fill = row.querySelector('.bar-visual-fill');
+                return {
+                    fill,
+                    value: parseMetricNumericValue(valueText)
+                };
+            });
+
+            const validValues = rowData
+                .map(item => item.value)
+                .filter(value => value !== null)
+                .map(value => Math.abs(value));
+
+            const maxValue = validValues.length ? Math.max(...validValues) : 0;
+
+            rowData.forEach(item => {
+                if (!item.fill) return;
+
+                if (item.value === null || maxValue <= 0) {
+                    item.fill.style.width = '0%';
+                    item.fill.style.opacity = '0.2';
+                    return;
+                }
+
+                const relativeWidth = (Math.abs(item.value) / maxValue) * 100;
+                const width = Math.max(relativeWidth, 12);
+                item.fill.style.width = `${Math.min(width, 100)}%`;
+                item.fill.style.opacity = '1';
+            });
+        });
     }
 
     function ensureCompetitivenessTooltip() {
@@ -962,6 +1032,20 @@ document.addEventListener("DOMContentLoaded", function() {
         };
     }
 
+    function formatDateToIso(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function parseIsoDate(value) {
+        if (typeof value !== 'string') return null;
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
     function setActivePeriod(days) {
         periodButtons.forEach(button => {
             const isActive = Number(button.dataset.period) === days;
@@ -1008,8 +1092,25 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         function getPeriodRange(days) {
-            const length = Math.min(Math.max(days, 1), candleSeriesData.length);
-            const startIndex = candleSeriesData.length - length;
+            const normalizedDays = Math.max(Number(days) || 1, 1);
+            const latestItem = maxData[maxData.length - 1];
+            const latestDate = latestItem ? parseIsoDate(latestItem.date) : null;
+
+            if (!latestDate) {
+                return {
+                    min: candleSeriesData[0].x,
+                    max: candleSeriesData[candleSeriesData.length - 1].x
+                };
+            }
+
+            const cutoffDate = new Date(latestDate);
+            cutoffDate.setDate(cutoffDate.getDate() - normalizedDays + 1);
+            const cutoffIsoDate = formatDateToIso(cutoffDate);
+            let startIndex = maxData.findIndex(item => item.date >= cutoffIsoDate);
+            if (startIndex < 0) {
+                startIndex = 0;
+            }
+
             return {
                 min: candleSeriesData[startIndex].x,
                 max: candleSeriesData[candleSeriesData.length - 1].x
@@ -1043,6 +1144,7 @@ document.addEventListener("DOMContentLoaded", function() {
         function syncBrushSelection(min, max) {
             const range = clampRange(min, max);
             if (!volumeChart) return;
+            currentViewportRange = { min: range.min, max: range.max };
             isSyncingBrushSelection = true;
             volumeChart.updateOptions({
                 chart: {
@@ -1063,6 +1165,7 @@ document.addEventListener("DOMContentLoaded", function() {
         function syncCandleViewport(min, max) {
             if (!candleChart) return;
             const range = clampRange(min, max);
+            currentViewportRange = { min: range.min, max: range.max };
             isSyncingViewport = true;
             candleChart.updateOptions({
                 xaxis: {
@@ -1268,6 +1371,45 @@ document.addEventListener("DOMContentLoaded", function() {
                     document.body.appendChild(volumeTooltip);
                 }
                 let isPointerDownOnVolumeChart = false;
+                let brushDragState = null;
+
+                function getBrushPlotRect() {
+                    return (
+                        volumeChartElement.querySelector('.apexcharts-grid')?.getBoundingClientRect()
+                        || volumeChartElement.querySelector('.apexcharts-inner')?.getBoundingClientRect()
+                        || volumeChartElement.getBoundingClientRect()
+                    );
+                }
+
+                function endBrushWindowDrag() {
+                    brushDragState = null;
+                    volumeChartElement.style.cursor = '';
+                    document.removeEventListener('mousemove', handleBrushWindowDragMove);
+                    document.removeEventListener('mouseup', endBrushWindowDrag, true);
+                }
+
+                function handleBrushWindowDragMove(event) {
+                    if (!brushDragState) return;
+
+                    const totalSpan = baseMaxX - baseMinX;
+                    const plotWidth = brushDragState.plotRect.width;
+                    const selectionWidth = brushDragState.initialRange.max - brushDragState.initialRange.min;
+
+                    if (totalSpan <= 0 || plotWidth <= 0 || selectionWidth <= 0) return;
+
+                    const deltaPx = event.clientX - brushDragState.startClientX;
+                    const deltaValue = (deltaPx / plotWidth) * totalSpan;
+                    let nextMin = brushDragState.initialRange.min + deltaValue;
+
+                    nextMin = Math.round(nextMin);
+                    nextMin = Math.max(baseMinX, Math.min(baseMaxX - selectionWidth, nextMin));
+
+                    const nextMax = nextMin + selectionWidth;
+
+                    syncCandleViewport(nextMin, nextMax);
+                    syncBrushSelection(nextMin, nextMax);
+                    clearActivePeriod();
+                }
 
                 function hideVolumeTooltip() {
                     volumeTooltip.classList.remove('is-visible');
@@ -1275,7 +1417,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
 
                 function showVolumeTooltip(event) {
-                    if (isPointerDownOnVolumeChart) {
+                    if (isPointerDownOnVolumeChart || brushDragState) {
                         hideVolumeTooltip();
                         return;
                     }
@@ -1337,10 +1479,44 @@ document.addEventListener("DOMContentLoaded", function() {
 
                 document.addEventListener('mousemove', showVolumeTooltip, true);
                 document.addEventListener('mouseleave', hideVolumeTooltip, true);
-                volumeChartElement.addEventListener('mousedown', function() {
+                volumeChartElement.addEventListener('mousedown', function(event) {
+                    const target = event.target;
+                    const isSelectionRect = Boolean(
+                        target
+                        && target.classList
+                        && target.classList.contains('apexcharts-selection-rect')
+                    );
+
+                    if (isSelectionRect && event.button === 0) {
+                        const activeRange = currentViewportRange
+                            ? { ...currentViewportRange }
+                            : { min: baseMinX, max: baseMaxX };
+                        const selectionWidth = activeRange.max - activeRange.min;
+
+                        if (selectionWidth > minVisibleSpan) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (typeof event.stopImmediatePropagation === 'function') {
+                                event.stopImmediatePropagation();
+                            }
+
+                            brushDragState = {
+                                startClientX: event.clientX,
+                                plotRect: getBrushPlotRect(),
+                                initialRange: activeRange
+                            };
+
+                            volumeChartElement.style.cursor = 'grabbing';
+                            hideVolumeTooltip();
+                            document.addEventListener('mousemove', handleBrushWindowDragMove);
+                            document.addEventListener('mouseup', endBrushWindowDrag, true);
+                            return;
+                        }
+                    }
+
                     isPointerDownOnVolumeChart = true;
                     hideVolumeTooltip();
-                });
+                }, true);
                 document.addEventListener('mouseup', function() {
                     isPointerDownOnVolumeChart = false;
                 }, true);
@@ -1351,7 +1527,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 }, true);
             }
 
-            applyPeriod(60);
+            applyPeriod(90);
         });
     } else {
         periodButtons.forEach(button => {
@@ -1394,6 +1570,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
     setMarkerPosition('marker-1day');
     setMarkerPosition('marker-1year');
+    updateMetricBars();
     renderCompetitivenessRadar();
 });
 </script>

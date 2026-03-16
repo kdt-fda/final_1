@@ -510,6 +510,15 @@ def finance(request, stock_code=None):
         stock_code=stock_code,
         reference_date__lte=yesterday
     ).order_by('-reference_date').first()
+    latest_company_finance = CompanyFinance.objects.filter(
+        stock_code=stock_code
+    ).values(
+        'biz_year', 'equity', 'net_income'
+    ).exclude(
+        biz_year__isnull=True
+    ).order_by(
+        '-biz_year'
+    ).first()
 
     base_date = latest_stock.reference_date if latest_stock else yesterday
     ninety_days_ago = base_date - timedelta(days=90)
@@ -595,12 +604,21 @@ def finance(request, stock_code=None):
         if latest_stock.pbr is not None: latest_stock.pbr = f"{float(latest_stock.pbr):.1f}"
         if latest_stock.dividend_yield is not None: latest_stock.dividend_yield = f"{float(latest_stock.dividend_yield):.1f}"
 
+    latest_finance_equity = float(latest_company_finance['equity']) if latest_company_finance and latest_company_finance.get('equity') is not None else None
+    latest_finance_net_income = float(latest_company_finance['net_income']) if latest_company_finance and latest_company_finance.get('net_income') is not None else None
+    valuation_alerts = {
+        'per_is_net_loss': latest_finance_net_income is not None and latest_finance_net_income < 0,
+        'pbr_is_complete_capital_impairment': latest_finance_equity is not None and latest_finance_equity < 0,
+        'biz_year': latest_company_finance.get('biz_year') if latest_company_finance else None,
+    }
+
     context = {
         'company': company,
         'latest_stock': latest_stock,
         'chart_data_json': chart_data,
         'peer_medians': peer_medians,
         'company_payout': company_payout,
+        'valuation_alerts': valuation_alerts,
         'competitiveness_radar': get_competitiveness_radar_context(stock_code),
     }
     return render(request, 'finance.html', context)
