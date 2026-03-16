@@ -58,7 +58,7 @@
         .chart-layout {
             display: grid;
             grid-template-columns: 2fr 1fr; /* 좌측 차트, 우측 가격범위 */
-            gap: 40px;
+            gap: 56px;
             align-items: start;
         }
         .empty-stock-card {
@@ -127,13 +127,14 @@
         }
 
         /* 우측 주가(기준일) 영역 스타일 */
-        .price-range-container { display: flex; flex-direction: column; gap: 30px; }
-        .price-title { font-size: 1.4rem; font-weight: bold; color: #222; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;}
-        .price-badge { font-size: 0.9rem; font-weight: bold; background: #eee; padding: 4px 12px; border-radius: 12px; color: #555; }
+        .price-range-container { display: flex; flex-direction: column; gap: 42px; padding-left: 12px; }
+        .price-title { font-size: 1.1rem; font-weight: 700; color: #222; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;}
+        .price-badge { font-size: 1rem; font-weight: 600; background: #eee; padding: 4px 12px; border-radius: 12px; color: #555; }
         
-        .range-box { position: relative; margin-top: 10px; }
-        .range-labels { display: flex; justify-content: space-between; font-size: 1.1rem; margin-bottom: 8px; font-weight: bold;}
-        .range-values { display: flex; justify-content: space-between; font-size: 1.2rem; margin-bottom: 5px; color: #444; }
+        .range-box { position: relative; margin-top: 6px; }
+        .range-box + .range-box { margin-top: 34px; }
+        .range-labels { display: flex; justify-content: space-between; font-size: 1rem; margin-bottom: 6px; font-weight: 700;}
+        .range-values { display: flex; justify-content: space-between; font-size: 1rem; margin-bottom: 8px; color: #444; line-height: 1.5; }
         .range-bar-bg { width: 100%; height: 10px; background: #e0e0e0; border-radius: 999px; position: relative; margin-top: 10px;}
         .range-marker {
             position: absolute; width: 8px; height: 8px; background: #1677ff; border-radius: 50%;
@@ -149,7 +150,7 @@
             border-width: 6px; border-style: solid; border-color: transparent transparent #fff transparent;
             filter: drop-shadow(0 0 6px rgba(17, 24, 39, 0.10));
         }
-        .missing-data-text { font-size: 1.1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
+        .missing-data-text { font-size: 1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
         .volume-hover-tooltip {
             position: fixed;
             z-index: 9999;
@@ -476,6 +477,7 @@
         @media (max-width: 960px) {
             .container { padding: 32px 24px 48px; }
             .chart-layout { grid-template-columns: 1fr; }
+            .price-range-container { padding-left: 0; }
             .competitiveness-layout { grid-template-columns: 1fr; }
             .competitiveness-summary-grid { grid-template-columns: 1fr 1fr; }
             .competitiveness-chart-column { padding-top: 0; }
@@ -558,7 +560,7 @@
                     </div>
 
                     {% if latest_stock.wk52_low != None and latest_stock.wk52_high != None %}
-                    <div class="range-box" style="margin-top: 20px;">
+                    <div class="range-box">
                         <div class="range-labels"><span>1년 최저가</span><span>1년 최고가</span></div>
                         <div class="range-values"><span>{{ latest_stock.wk52_low|intcomma }}원</span><span>{{ latest_stock.wk52_high|intcomma }}원</span></div>
                         <div class="range-bar-bg">
@@ -1139,7 +1141,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
             return { min: nextMin, max: nextMax };
         }
-
 
         function syncBrushSelection(min, max) {
             const range = clampRange(min, max);
