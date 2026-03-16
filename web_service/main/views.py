@@ -1,4 +1,4 @@
-﻿from django.shortcuts import render, get_object_or_404, redirect
+from django.shortcuts import render, get_object_or_404, redirect
 from datetime import date, timedelta
 import statistics
 import json
@@ -353,7 +353,10 @@ def industry(request, stock_code=None):
             '-reference_date'
         )
 
-        industry_qs = Basic.objects.filter(ind_code=company_obj.ind_code).annotate(
+        industry_qs = Basic.objects.filter(
+            ind_code=company_obj.ind_code,
+            is_active=True,
+        ).annotate(
             latest_mktcap=Subquery(latest_stock.values('mktcap')[:1]),
             latest_price_change=Subquery(latest_stock.values('price_change')[:1]),
             latest_fluc_rt=Subquery(latest_stock.values('fluc_rt')[:1]),
@@ -577,4 +580,3 @@ def about(request):
 
 def stats(request):
     return render(request, 'stats.html')
-

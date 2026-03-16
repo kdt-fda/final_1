@@ -61,6 +61,70 @@
             gap: 40px;
             align-items: start;
         }
+        .empty-stock-card {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+            text-align: center;
+            color: #555;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .chart-panel { min-width: 0; }
+        .chart-panel-header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .chart-period-tabs {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            width: 100%;
+            border-bottom: 1px solid #ececec;
+            padding-bottom: 2px;
+        }
+        .chart-period-button {
+            position: relative;
+            border: 0;
+            background: transparent;
+            color: #6f6f6f;
+            cursor: pointer;
+            font: inherit;
+            font-size: 1.05rem;
+            font-weight: 500;
+            padding: 0 28px 14px;
+            transition: color 0.2s ease;
+        }
+        .chart-period-button:hover { color: #222; }
+        .chart-period-button + .chart-period-button { border-left: 1px solid #d9d9d9; }
+        .chart-period-button.is-active {
+            color: #111;
+            font-weight: 800;
+        }
+        .chart-period-button.is-active::after {
+            content: '';
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            bottom: -3px;
+            height: 4px;
+            border-radius: 999px 999px 0 0;
+            background: #111;
+        }
+        .chart-period-button:focus-visible {
+            outline: 2px solid #111;
+            outline-offset: 4px;
+            border-radius: 8px;
+        }
+        .chart-period-button:disabled {
+            cursor: default;
+            opacity: 0.45;
+        }
 
         /* 우측 주가(기준일) 영역 스타일 */
         .price-range-container { display: flex; flex-direction: column; gap: 30px; }
@@ -70,21 +134,53 @@
         .range-box { position: relative; margin-top: 10px; }
         .range-labels { display: flex; justify-content: space-between; font-size: 1.1rem; margin-bottom: 8px; font-weight: bold;}
         .range-values { display: flex; justify-content: space-between; font-size: 1.2rem; margin-bottom: 5px; color: #444; }
-        .range-bar-bg { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; position: relative; margin-top: 10px;}
+        .range-bar-bg { width: 100%; height: 10px; background: #e0e0e0; border-radius: 999px; position: relative; margin-top: 10px;}
         .range-marker {
-            position: absolute; width: 16px; height: 16px; background: #007bff; border-radius: 50%;
-            top: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 2;
+            position: absolute; width: 8px; height: 8px; background: #1677ff; border-radius: 50%;
+            top: 50%; transform: translate(-50%, -50%); box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18); z-index: 2;
         }
         .marker-label {
-            position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
-            background: #007bff; color: #fff; padding: 4px 10px; border-radius: 4px;
-            font-size: 1.0rem; font-weight: bold; white-space: nowrap;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #fff; color: #111; padding: 6px 12px; border-radius: 12px;
+            font-size: 1.0rem; font-weight: 700; white-space: nowrap; box-shadow: 0 0 18px rgba(17, 24, 39, 0.14);
         }
         .marker-label::after {
             content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-            border-width: 5px; border-style: solid; border-color: transparent transparent #007bff transparent;
+            border-width: 6px; border-style: solid; border-color: transparent transparent #fff transparent;
+            filter: drop-shadow(0 0 6px rgba(17, 24, 39, 0.10));
         }
         .missing-data-text { font-size: 1.1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
+        .volume-hover-tooltip {
+            position: fixed;
+            z-index: 9999;
+            display: none;
+            pointer-events: none;
+            transform: translate(-50%, calc(-100% - 10px));
+        }
+        .volume-hover-tooltip.is-visible { display: block; }
+        .volume-hover-tooltip-card {
+            padding: 10px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 5px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 200px;
+        }
+        .volume-hover-tooltip-date {
+            margin-bottom: 6px;
+            font-weight: bold;
+            color: #111;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+            text-align: center;
+        }
+        .volume-hover-tooltip-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .volume-hover-tooltip-row + .volume-hover-tooltip-row { margin-top: 4px; }
 
         /* 하단 지표 2분할 레이아웃 */
         .grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
@@ -92,8 +188,9 @@
         /* 개별 지표 카드 내부 스타일 */
         .metric-item { display: flex; flex-direction: column; gap: 10px; }
         .metric-badge { 
-            align-self: flex-start; border: 1px solid #333; border-radius: 20px; 
+            align-self: flex-start; border: none; border-radius: 20px; 
             padding: 5px 20px; font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;
+            background: #fff; box-shadow: 0 10px 24px rgba(17, 24, 39, 0.10);
         }
         .metric-desc { font-size: 1.1rem; color: #555; line-height: 1.5; margin-bottom: 15px;}
         
@@ -105,7 +202,17 @@
         .bar-visual-fill { height: 100%; border-radius: 5px; }
         .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
         .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
-    </style>
+
+        @media (max-width: 960px) {
+            .container { padding: 32px 24px 48px; }
+            .chart-layout { grid-template-columns: 1fr; }
+            .chart-period-tabs {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+            .chart-period-button { flex: 0 0 auto; }
+        }
+</style>
 </head>
 <body>
 
@@ -128,16 +235,25 @@
     </section>
 
     <section class="section-block">
+        {% if latest_stock and chart_data_json %}
         <div class="card chart-layout">
-            <div style="min-width: 0;"> <!-- 차트 영역 최소 너비 보장 -->
-                <h3 style="margin-top:0;">동적 테이블(최근 90일)</h3>
+            <div class="chart-panel">
+                <div class="chart-panel-header">
+                    <div class="chart-period-tabs" role="group" aria-label="차트 기간 선택">
+                        <button type="button" class="chart-period-button" data-period="7" aria-pressed="false">7일</button>
+                        <button type="button" class="chart-period-button" data-period="15" aria-pressed="false">15일</button>
+                        <button type="button" class="chart-period-button" data-period="30" aria-pressed="false">30일</button>
+                        <button type="button" class="chart-period-button" data-period="60" aria-pressed="false">60일</button>
+                    </div>
+                </div>
                 <div id="candlestick-chart"></div>
                 <div id="volume-chart"></div>
+
                 <div style="font-size: 0.9rem; color:#888; margin-top:10px;">자료: 한국거래소 시장정보</div>
             </div>
 
             <div class="price-range-container">
-                <div class="price-title">주가(기준일) <span class="price-badge">{{ latest_stock.reference_date|date:"Y-m-d"|default:"데이터 없음" }} 종가</span></div>
+                <div class="price-title">주가 <span class="price-badge">{{ latest_stock.reference_date|date:"Y-m-d"|default:"데이터 없음" }} 종가</span></div>
                 
                 {% if latest_stock %}
                     <div class="range-box">
@@ -174,6 +290,11 @@
                 {% endif %}
             </div>
         </div>
+        {% else %}
+        <div class="card empty-stock-card">
+            <div>* 주가 데이터가 존재하지 않습니다.</div>
+        </div>
+        {% endif %}
     </section>
 
     <section class="section-block">
@@ -271,45 +392,232 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // 1. 차트 데이터 로드
-    const rawData = JSON.parse(document.getElementById('chart-data').textContent);
-    
-    if (rawData && rawData.length > 0) {
-        // 1. 공통 데이터 전처리
-        // 캔들 차트 포맷: {x: 날짜문자열, y: [시가, 고가, 저가, 종가]}
-        const candleSeriesData = rawData.map(item => {
-            return {
-                x: item.date,
-                y: [item.open, item.high, item.low, item.close]
-            };
-        });
+    const chartDataElement = document.getElementById('chart-data');
+    const rawData = chartDataElement ? JSON.parse(chartDataElement.textContent) : [];
+    const periodButtons = Array.from(document.querySelectorAll('.chart-period-button'));
+    const maxWindowDays = 60;
+    const maxData = rawData.slice(-Math.min(maxWindowDays, rawData.length));
+    let candleChart = null;
+    let volumeChart = null;
+    let isApplyingPreset = false;
+    let isSyncingViewport = false;
+    let isSyncingBrushSelection = false;
 
-        // 거래량 차트 포맷: {x: 날짜문자열, y: 거래량, tradingValue: 거래대금}
-        const volumeSeriesData = rawData.map(item => {
-            return {
-                x: item.date,
+    function formatShortDate(value) {
+        if (typeof value === 'string') {
+            const parts = value.split('-');
+            if (parts.length >= 3) {
+                return `${parts[1]}-${parts[2]}`;
+            }
+        }
+
+        const normalizedTimestamp = Number(value);
+        if (!Number.isFinite(normalizedTimestamp)) return '';
+
+        const date = new Date(normalizedTimestamp);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${month}-${day}`;
+    }
+
+    function buildChartSeries(data) {
+        return {
+            candleSeriesData: data.map((item, index) => ({
+                x: index,
+                y: [item.open, item.high, item.low, item.close],
+                dateLabel: item.date
+            })),
+            volumeSeriesData: data.map((item, index) => ({
+                x: index,
                 y: item.volume,
-                tradingValue: item.trading_value || 0
-            };
-        });
+                tradingValue: item.trading_value || 0,
+                dateLabel: item.date
+            }))
+        };
+    }
 
-        // 2. 캔들 차트 설정 (상단)
+    function setActivePeriod(days) {
+        periodButtons.forEach(button => {
+            const isActive = Number(button.dataset.period) === days;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    }
+
+    function clearActivePeriod() {
+        periodButtons.forEach(button => {
+            button.classList.remove('is-active');
+            button.setAttribute('aria-pressed', 'false');
+        });
+    }
+
+    if (maxData && maxData.length > 0) {
+        const { candleSeriesData, volumeSeriesData } = buildChartSeries(maxData);
+        const baseMinX = candleSeriesData[0].x;
+        const baseMaxX = candleSeriesData[candleSeriesData.length - 1].x;
+        const minVisibleSpan = 0.5;
+
+        function getDateLabelByX(value) {
+            const numericValue = Number(value);
+            if (!Number.isFinite(numericValue)) return '';
+
+            const clampedIndex = Math.max(0, Math.min(maxData.length - 1, Math.round(numericValue)));
+            const item = maxData[clampedIndex];
+            return item ? formatShortDate(item.date) : '';
+        }
+
+        function shouldForceBrushSync(xaxis, range) {
+            const rawMin = Number(xaxis.min);
+            const rawMax = Number(xaxis.max);
+            if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return true;
+            return Math.abs(rawMin - range.min) > 0.001 || Math.abs(rawMax - range.max) > 0.001;
+        }
+
+        function buildVolumeTooltipHtml(data) {
+            return `<div class="volume-hover-tooltip-card">
+                <div class="volume-hover-tooltip-date">${data.dateLabel}</div>
+                <div class="volume-hover-tooltip-row"><span>거래량</span><b style="color:#000;">${data.y.toLocaleString()}</b></div>
+                <div class="volume-hover-tooltip-row"><span>거래대금</span><b style="color:#000;">${data.tradingValue.toLocaleString()}</b></div>
+            </div>`;
+        }
+
+        function getPeriodRange(days) {
+            const length = Math.min(Math.max(days, 1), candleSeriesData.length);
+            const startIndex = candleSeriesData.length - length;
+            return {
+                min: candleSeriesData[startIndex].x,
+                max: candleSeriesData[candleSeriesData.length - 1].x
+            };
+        }
+
+        function clampRange(min, max) {
+            let nextMin = Number.isFinite(min) ? min : baseMinX;
+            let nextMax = Number.isFinite(max) ? max : baseMaxX;
+
+            nextMin = Math.max(baseMinX, nextMin);
+            nextMax = Math.min(baseMaxX, nextMax);
+
+            if (nextMax - nextMin < minVisibleSpan) {
+                if (nextMax >= baseMaxX) {
+                    nextMin = Math.max(baseMinX, baseMaxX - minVisibleSpan);
+                    nextMax = baseMaxX;
+                } else {
+                    nextMax = Math.min(baseMaxX, nextMin + minVisibleSpan);
+                }
+            }
+
+            if (nextMin > nextMax) {
+                nextMin = Math.max(baseMinX, nextMax - minVisibleSpan);
+            }
+
+            return { min: nextMin, max: nextMax };
+        }
+
+
+        function syncBrushSelection(min, max) {
+            const range = clampRange(min, max);
+            if (!volumeChart) return;
+            isSyncingBrushSelection = true;
+            volumeChart.updateOptions({
+                chart: {
+                    selection: {
+                        enabled: true,
+                        xaxis: {
+                            min: range.min,
+                            max: range.max
+                        }
+                    }
+                }
+            }, false, false, false);
+            setTimeout(() => {
+                isSyncingBrushSelection = false;
+            }, 0);
+        }
+
+        function syncCandleViewport(min, max) {
+            if (!candleChart) return;
+            const range = clampRange(min, max);
+            isSyncingViewport = true;
+            candleChart.updateOptions({
+                xaxis: {
+                    type: 'numeric',
+                    min: range.min,
+                    max: range.max,
+                    labels: { show: false },
+                    axisBorder: { show: false }
+                }
+            }, false, false, false);
+            setTimeout(() => {
+                isSyncingViewport = false;
+            }, 0);
+        }
+
+        function applyPeriod(days) {
+            if (!candleChart || !volumeChart) return;
+            const periodRange = getPeriodRange(days);
+            const range = clampRange(periodRange.min, periodRange.max);
+            isApplyingPreset = true;
+            syncCandleViewport(range.min, range.max);
+            syncBrushSelection(range.min, range.max);
+            setActivePeriod(days);
+            setTimeout(() => {
+                isApplyingPreset = false;
+            }, 0);
+        }
+
+        function handleManualViewport(xaxis, source) {
+            if (isApplyingPreset || isSyncingViewport || isSyncingBrushSelection || !xaxis) return;
+            const range = clampRange(xaxis.min, xaxis.max);
+
+            if (source === 'brush') {
+                syncCandleViewport(range.min, range.max);
+                if (shouldForceBrushSync(xaxis, range)) {
+                    syncBrushSelection(range.min, range.max);
+                }
+            } else {
+                syncBrushSelection(range.min, range.max);
+            }
+
+            clearActivePeriod();
+        }
+
         var candleOptions = {
             series: [{ name: '주가', data: candleSeriesData }],
             chart: {
                 type: 'candlestick',
                 height: 290,
                 id: 'candles',
-                toolbar: { show: false }, // 도구 숨김
+                toolbar: { show: false, autoSelected: 'zoom' },
+                zoom: {
+                    enabled: true,
+                    type: 'x',
+                    autoScaleYaxis: true,
+                    allowMouseWheelZoom: true
+                },
+                events: {
+                    beforeZoom: function(ctx, { xaxis }) {
+                        const range = clampRange(xaxis.min, xaxis.max);
+                        return { xaxis: range };
+                    },
+                    zoomed: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    },
+                    scrolled: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    },
+                    selection: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    }
+                }
             },
             plotOptions: {
                 candlestick: {
-                    colors: { upward: '#ef5350', downward: '#2196f3' } // 상승: 빨강, 하락: 파랑
+                    colors: { upward: '#ef5350', downward: '#2196f3' }
                 }
             },
-            xaxis: { 
-                type: 'category', 
-                labels: { show: false }, 
+            xaxis: {
+                type: 'numeric',
+                labels: { show: false },
                 axisBorder: { show: false }
             },
             yaxis: { tooltip: { enabled: false }, labels: { formatter: (val) => Math.round(val).toLocaleString() } },
@@ -321,12 +629,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
                     const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
                     const dataObj = candleSeriesData[dataPointIndex];
-                    if(o === undefined || !dataObj) return '';
-                    
-                    const dateStr = dataObj.x;
-                    
+                    if (o === undefined || !dataObj) return '';
+
                     return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 150px;">
-                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
+                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dataObj.dateLabel}</div>
                         <div style="display:flex; justify-content:space-between;"><span>시가</span> <b style="color: #000;">${o.toLocaleString()}</b></div>
                         <div style="display:flex; justify-content:space-between;"><span>고가</span> <b style="color: #000;">${h.toLocaleString()}</b></div>
                         <div style="display:flex; justify-content:space-between;"><span>저가</span> <b style="color: #000;">${l.toLocaleString()}</b></div>
@@ -336,61 +642,52 @@ document.addEventListener("DOMContentLoaded", function() {
             },
             grid: { padding: { left: 10, right: 10 } }
         };
-        var candleChart = new ApexCharts(document.querySelector("#candlestick-chart"), candleOptions);
-        candleChart.render();
+        candleChart = new ApexCharts(document.querySelector("#candlestick-chart"), candleOptions);
 
-        const vols = volumeSeriesData.map(d => d.y);
-        const minVol = Math.min(...vols);
-        const yaxisMin = Math.floor(minVol * 0.9);
-
-        // 3. 거래량 바 차트 설정 (하단)
         var volumeOptions = {
             series: [{ name: '거래량', data: volumeSeriesData }],
             chart: {
                 type: 'bar',
-                height: 120,
+                height: 180,
+                id: 'volume-brush',
                 brush: { enabled: true, target: 'candles', autoScaleYaxis: true },
-                selection: { enabled: true },
-                toolbar: { show: false }
+                selection: {
+                    enabled: true,
+                    xaxis: {
+                        min: baseMinX,
+                        max: baseMaxX
+                    }
+                },
+                toolbar: { show: false },
+                events: {
+                    selection: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'brush');
+                    },
+                    brushScrolled: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'brush');
+                    }
+                }
             },
-            colors: ['#999999'], // 단일 회색
+            colors: ['#999999'],
             dataLabels: { enabled: false },
             plotOptions: { bar: { columnWidth: '80%' } },
-            legend: { show: false }, 
-            xaxis: { 
-                type: 'category', 
-                axisTicks: { show: false },
-                labels: { 
-                    formatter: (val) => {
-                        if (!val) return '';
-                        const index = volumeSeriesData.findIndex(item => item.x === val);
-                        const total = volumeSeriesData.length;
-                        
-                        // 처음, 마지막, 그리고 중간중간
-                        const gap = Math.max(1, Math.floor(total / 4));
-                        
-                        if (index === 0 || index === total - 1) {
-                            const dateParts = val.split('-');
-                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
-                            return val;
-                        } else if (index % gap === 0) {
-                            // 중간 라벨이 끝부분 라벨들과 너무 가까우면 안 그림
-                            if (index < gap / 2 || (total - 1 - index) < gap / 2) return '';
-                            
-                            const dateParts = val.split('-');
-                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
-                            return val;
-                        }
-                        return '';
+            legend: { show: false },
+            xaxis: {
+                type: 'numeric',
+                min: baseMinX,
+                max: baseMaxX,
+                tickAmount: 5,
+                labels: {
+                    formatter: function(value) {
+                        return getDateLabelByX(value);
                     }
                 }
             },
             yaxis: {
-                min: yaxisMin,
+                min: Math.max(0, Math.floor(Math.min(...volumeSeriesData.map(item => Number(item.y) || 0)) * 0.9)),
                 labels: {
                     show: true,
-                    formatter: (val) => {
-                        // 금액 단위 줄이기 K, M 등
+                    formatter: function(val) {
                         if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
                         if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
                         return Math.round(val).toLocaleString();
@@ -399,29 +696,131 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             },
             tooltip: {
-                enabled: true,
-                custom: function({seriesIndex, dataPointIndex, w}) {
-                    const data = volumeSeriesData[dataPointIndex];
-                    if(!data) return '';
-                    const dateStr = data.x;
-                    const vol = data.y;
-                    const val = data.tradingValue;
-                    
-                    return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 200px;">
-                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;"><span>거래량</span> <b style="color: #000;">${vol.toLocaleString()}</b></div>
-                        <div style="display:flex; justify-content:space-between;"><span>거래대금</span> <b style="color: #000;">${val.toLocaleString()}</b></div>
-                    </div>`;
-                }
+                enabled: false
             },
             grid: { padding: { left: 15, right: 15 } }
         };
-        var volumeChart = new ApexCharts(document.querySelector("#volume-chart"), volumeOptions);
-        volumeChart.render();
+        volumeChart = new ApexCharts(document.querySelector("#volume-chart"), volumeOptions);
+
+        const chartContainers = [document.getElementById('candlestick-chart'), document.getElementById('volume-chart')].filter(Boolean);
+        chartContainers.forEach(container => {
+            container.addEventListener('wheel', function() {
+                if (!isApplyingPreset) {
+                    clearActivePeriod();
+                }
+            }, { passive: true });
+        });
+
+        periodButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const days = Number(this.dataset.period);
+                if (!Number.isFinite(days)) return;
+                applyPeriod(days);
+            });
+        });
+
+        Promise.all([candleChart.render(), volumeChart.render()]).then(function() {
+            const volumeChartElement = document.getElementById('volume-chart');
+            if (volumeChartElement) {
+                let volumeTooltip = document.getElementById('volume-hover-tooltip');
+                if (!volumeTooltip) {
+                    volumeTooltip = document.createElement('div');
+                    volumeTooltip.id = 'volume-hover-tooltip';
+                    volumeTooltip.className = 'volume-hover-tooltip';
+                    document.body.appendChild(volumeTooltip);
+                }
+                let isPointerDownOnVolumeChart = false;
+
+                function hideVolumeTooltip() {
+                    volumeTooltip.classList.remove('is-visible');
+                    volumeTooltip.innerHTML = '';
+                }
+
+                function showVolumeTooltip(event) {
+                    if (isPointerDownOnVolumeChart) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const gridElement = volumeChartElement.querySelector('.apexcharts-grid');
+                    if (!gridElement) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const gridRect = gridElement.getBoundingClientRect();
+                    if (
+                        event.clientX < gridRect.left
+                        || event.clientX > gridRect.right
+                        || event.clientY < gridRect.top
+                        || event.clientY > gridRect.bottom
+                    ) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const barElements = Array.from(volumeChartElement.querySelectorAll('.apexcharts-bar-series path, .apexcharts-bar-series rect'))
+                        .map((element, index) => {
+                            const rect = element.getBoundingClientRect();
+                            return { element, index, rect };
+                        })
+                        .filter(item => {
+                            return item.rect.width > 0
+                                && item.rect.height > 0
+                                && item.index < volumeSeriesData.length;
+                        });
+
+                    const matchingBar = barElements.find(item => (
+                        event.clientX >= item.rect.left
+                        && event.clientX <= item.rect.right
+                        && event.clientY >= item.rect.top
+                        && event.clientY <= item.rect.bottom
+                    ));
+
+                    if (!matchingBar) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const data = volumeSeriesData[matchingBar.index];
+                    if (!data) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const tooltipLeft = matchingBar.rect.left + (matchingBar.rect.width / 2);
+                    const tooltipTop = matchingBar.rect.top;
+
+                    volumeTooltip.innerHTML = buildVolumeTooltipHtml(data);
+                    volumeTooltip.style.left = `${tooltipLeft}px`;
+                    volumeTooltip.style.top = `${tooltipTop}px`;
+                    volumeTooltip.classList.add('is-visible');
+                }
+
+                document.addEventListener('mousemove', showVolumeTooltip, true);
+                document.addEventListener('mouseleave', hideVolumeTooltip, true);
+                volumeChartElement.addEventListener('mousedown', function() {
+                    isPointerDownOnVolumeChart = true;
+                    hideVolumeTooltip();
+                });
+                document.addEventListener('mouseup', function() {
+                    isPointerDownOnVolumeChart = false;
+                }, true);
+                document.addEventListener('mousemove', function(event) {
+                    if (isPointerDownOnVolumeChart) {
+                        hideVolumeTooltip();
+                    }
+                }, true);
+            }
+
+            applyPeriod(60);
+        });
+    } else {
+        periodButtons.forEach(button => {
+            button.disabled = true;
+        });
     }
 
-
-    // 4. 우측 주가(기준일) 파란색 마커 위치 계산
     function setMarkerPosition(elementId) {
         const marker = document.getElementById(elementId);
         if (!marker) return;
@@ -435,28 +834,23 @@ document.addEventListener("DOMContentLoaded", function() {
         const close = parseFloat(closeStr.replace(/,/g, ''));
 
         if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high > low) {
-            // (종가 - 저가) / (고가 - 저가) * 100 으로 퍼센티지 산출
             let percentage = ((close - low) / (high - low)) * 100;
-            // 마커가 바깥으로 안 나가게 0~100 사이 보정
-            percentage = Math.max(0, Math.min(100, percentage)); 
-            
-            // 왼쪽 0%, 오른쪽 100% 위치 지정
+            percentage = Math.max(0, Math.min(100, percentage));
             marker.style.left = percentage + "%";
-            
+
             const label = marker.querySelector('.marker-label');
             if (label) {
                 label.textContent = close.toLocaleString() + '원';
             }
         } else if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high === low) {
-            // 고가와 저가가 같다면 중간에 마커 표시
             marker.style.left = "50%";
-            
+
             const label = marker.querySelector('.marker-label');
             if (label) {
                 label.textContent = close.toLocaleString() + '원';
             }
         } else {
-            marker.style.display = "none"; // 데이터가 이상하면 마커 숨김
+            marker.style.display = "none";
         }
     }
 
