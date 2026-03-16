@@ -1,11 +1,441 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from datetime import date, timedelta
+import math
+import threading
 import statistics
 import json
+import pandas as pd
 from django.db.models import OuterRef, Subquery
 from django.db.utils import OperationalError, ProgrammingError
 
-from .models import Basic, BokIo, CompanyStock, IndBok, IndIo, Report
+from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report
+
+
+COMPETITIVENESS_METRICS = [
+    {'key': 'roe', 'label': 'ROE', 'higher_is_better': True},
+    {'key': 'gross_margin_pct', 'label': '매출총이익률', 'higher_is_better': True},
+    {'key': 'debt_ratio_pct', 'label': '부채비율', 'higher_is_better': False},
+    {'key': 'sales_growth_rate_pct', 'label': '매출성장률', 'higher_is_better': True},
+    {'key': 'cashholding_ratio_pct', 'label': '현금보유비율', 'higher_is_better': True},
+]
+COMPETITIVENESS_ANALYSIS_COPY = {
+    'roe': {
+        'strong': '경쟁사 평균보다 자본을 활용해 더 높은 수익을 창출하고 있어요',
+        'weak': '경쟁사 평균보다 자본 대비 수익성이 낮은 편이에요',
+    },
+    'gross_margin_pct': {
+        'strong': '경쟁사 평균보다 마진율이 높아요',
+        'weak': '경쟁사 평균보다 마진율이 낮은 편이에요',
+    },
+    'debt_ratio_pct': {
+        'strong': '경쟁사 평균보다 재무 구조가 안정적이에요',
+        'weak': '경쟁사 평균보다 부채 부담이 높은 편이에요',
+    },
+    'sales_growth_rate_pct': {
+        'strong': '경쟁사 평균보다 매출이 빠르게 성장하고 있어요',
+        'weak': '경쟁사 평균보다 매출 성장 속도가 느린 편이에요',
+    },
+    'cashholding_ratio_pct': {
+        'strong': '경쟁사 평균보다 현금 여력이 충분해요',
+        'weak': '경쟁사 평균보다 현금 여력이 낮은 편이에요',
+    },
+}
+COMPETITIVENESS_METRIC_KEYS = [metric['key'] for metric in COMPETITIVENESS_METRICS]
+COMPETITIVENESS_CACHE_COLUMNS = ['stock_code', 'ind_code', 'biz_year', *COMPETITIVENESS_METRIC_KEYS]
+COMPETITIVENESS_YEAR_CONFIRM_RATIO = 0.7
+_COMPETITIVENESS_FINANCE_DF = None
+_COMPETITIVENESS_FINANCE_LOCK = threading.Lock()
+_COMPETITIVENESS_CONFIRMED_YEARS = []
+_COMPETITIVENESS_ACTIVE_COMPANY_COUNT = 0
+
+
+def _empty_competitiveness_radar_context(stock_code=None):
+    metric_payload = []
+    for metric in COMPETITIVENESS_METRICS:
+        metric_payload.append({
+            'key': metric['key'],
+            'label': metric['label'],
+            'label_with_value': f"{metric['label']}(-)",
+            'company_value': None,
+            'company_display': '-',
+            'company_score': None,
+            'peer_average_score': None,
+        })
+
+    return {
+        'available': False,
+        'stock_code': stock_code,
+        'target_year': None,
+        'peer_year': None,
+        'peer_count': 0,
+        'industry_company_count': 0,
+        'comparison_label': '피어그룹 평균',
+        'uses_market_average_fallback': False,
+        'labels': [item['label'] for item in metric_payload],
+        'labels_with_values': [item['label_with_value'] for item in metric_payload],
+        'company_scores': [item['company_score'] for item in metric_payload],
+        'peer_average_scores': [item['peer_average_score'] for item in metric_payload],
+        'metrics': metric_payload,
+        'analysis_items': [],
+    }
+
+
+def _format_percent_metric(value):
+    if value is None or pd.isna(value):
+        return '-'
+    return f"{float(value):.1f}%"
+
+
+def _round_score(value):
+    if value is None or pd.isna(value):
+        return None
+    return round(float(value), 1)
+
+
+def _build_competitiveness_finance_dataframe():
+    global _COMPETITIVENESS_CONFIRMED_YEARS, _COMPETITIVENESS_ACTIVE_COMPANY_COUNT
+
+    basic_records = list(
+        Basic.objects.filter(is_active=True).values('stock_code', 'ind_code')
+    )
+    finance_records = list(
+        CompanyFinance.objects.values('stock_code', 'biz_year', *COMPETITIVENESS_METRIC_KEYS)
+    )
+    _COMPETITIVENESS_ACTIVE_COMPANY_COUNT = len({record['stock_code'] for record in basic_records})
+
+    if not basic_records or not finance_records:
+        _COMPETITIVENESS_CONFIRMED_YEARS = []
+        return pd.DataFrame(columns=COMPETITIVENESS_CACHE_COLUMNS)
+
+    basic_df = pd.DataFrame.from_records(basic_records)
+    finance_df = pd.DataFrame.from_records(finance_records)
+    merged_df = basic_df.merge(finance_df, on='stock_code', how='inner')
+
+    for column in ['biz_year', *COMPETITIVENESS_METRIC_KEYS]:
+        merged_df[column] = pd.to_numeric(merged_df[column], errors='coerce')
+
+    merged_df = merged_df.dropna(subset=['stock_code', 'ind_code', 'biz_year']).copy()
+    if merged_df.empty:
+        _COMPETITIVENESS_CONFIRMED_YEARS = []
+        return pd.DataFrame(columns=COMPETITIVENESS_CACHE_COLUMNS)
+
+    merged_df['biz_year'] = merged_df['biz_year'].astype(int)
+    merged_df['ind_code'] = merged_df['ind_code'].astype(str)
+
+    # 연도 fallback 규칙을 위해 활성 기업의 재무 이력을 모두 메모리에 유지한다.
+    merged_df = (
+        merged_df
+        .sort_values(['stock_code', 'biz_year'], ascending=[True, False])
+        .drop_duplicates(subset=['stock_code', 'biz_year'], keep='first')
+        .reset_index(drop=True)
+    )
+
+    final_df = merged_df[COMPETITIVENESS_CACHE_COLUMNS]
+    _COMPETITIVENESS_CONFIRMED_YEARS = _get_confirmed_competitiveness_years(
+        final_df,
+        _COMPETITIVENESS_ACTIVE_COMPANY_COUNT,
+    )
+
+    return final_df
+
+
+def _get_competitiveness_finance_dataframe():
+    global _COMPETITIVENESS_FINANCE_DF
+
+    if _COMPETITIVENESS_FINANCE_DF is None:
+        with _COMPETITIVENESS_FINANCE_LOCK:
+            if _COMPETITIVENESS_FINANCE_DF is None:
+                _COMPETITIVENESS_FINANCE_DF = _build_competitiveness_finance_dataframe()
+
+    return _COMPETITIVENESS_FINANCE_DF
+
+
+def _get_confirmed_competitiveness_years(finance_df, active_company_count):
+    if finance_df is None or finance_df.empty or active_company_count <= 0:
+        return []
+
+    required_count = max(1, math.ceil(active_company_count * COMPETITIVENESS_YEAR_CONFIRM_RATIO))
+    year_counts = finance_df.groupby('biz_year')['stock_code'].nunique()
+
+    confirmed_years = year_counts[year_counts >= required_count].index.tolist()
+    return sorted(int(year) for year in confirmed_years)
+
+
+def _get_latest_company_finance_row(finance_df, stock_code):
+    company_df = finance_df[finance_df['stock_code'] == stock_code]
+    if company_df.empty:
+        return None
+    return company_df.sort_values('biz_year', ascending=False).iloc[0]
+
+
+def _get_latest_confirmed_company_finance_row(finance_df, stock_code, confirmed_years):
+    if not confirmed_years:
+        return None
+
+    company_df = finance_df[
+        (finance_df['stock_code'] == stock_code)
+        & (finance_df['biz_year'].isin([int(year) for year in confirmed_years]))
+    ]
+    if company_df.empty:
+        return None
+
+    return company_df.sort_values('biz_year', ascending=False).iloc[0]
+
+
+def _get_company_finance_row_by_year(finance_df, stock_code, biz_year):
+    if biz_year is None:
+        return None
+
+    company_year_df = finance_df[
+        (finance_df['stock_code'] == stock_code) & (finance_df['biz_year'] == int(biz_year))
+    ]
+    if company_year_df.empty:
+        return None
+
+    return company_year_df.sort_values('biz_year', ascending=False).iloc[0]
+
+
+def _get_unique_rows_for_year(finance_df, biz_year):
+    if biz_year is None:
+        return finance_df.iloc[0:0].copy()
+
+    year_df = finance_df[finance_df['biz_year'] == int(biz_year)]
+    if year_df.empty:
+        return year_df.copy()
+
+    return (
+        year_df
+        .sort_values(['stock_code', 'biz_year'], ascending=[True, False])
+        .drop_duplicates(subset=['stock_code'], keep='first')
+        .reset_index(drop=True)
+    )
+
+
+def _select_latest_year_with_min_companies(industry_df, minimum_company_count):
+    if industry_df.empty:
+        return None
+
+    year_counts = industry_df.groupby('biz_year')['stock_code'].nunique()
+    eligible_years = year_counts[year_counts >= minimum_company_count]
+    if not eligible_years.empty:
+        return int(eligible_years.index.max())
+
+    max_count = int(year_counts.max()) if not year_counts.empty else 0
+    if max_count <= 0:
+        return None
+
+    return int(year_counts[year_counts == max_count].index.max())
+
+
+def _calculate_percentile_score(series, value, higher_is_better=True):
+    if value is None or pd.isna(value):
+        return None
+
+    valid_series = pd.Series(series).dropna()
+    if valid_series.empty:
+        return None
+
+    percentile = float((valid_series <= float(value)).mean() * 100)
+    if not higher_is_better:
+        percentile = 100 - percentile
+
+    percentile = max(0.0, min(100.0, percentile))
+    return _round_score(percentile)
+
+
+def _build_competitiveness_analysis_items(metrics_payload, use_market_average=False):
+    analysis_items = []
+
+    for index, metric in enumerate(metrics_payload):
+        company_score = metric.get('company_score')
+        peer_average_score = metric.get('peer_average_score')
+
+        if company_score is None or peer_average_score is None:
+            continue
+
+        score_gap = float(company_score) - float(peer_average_score)
+        gap_magnitude = abs(score_gap)
+        is_strong = score_gap >= 0
+        status = 'strong' if is_strong else 'weak'
+        copy_map = COMPETITIVENESS_ANALYSIS_COPY.get(metric['key'], {})
+        message = copy_map.get(status, '')
+        if use_market_average:
+            message = message.replace('경쟁사 평균보다', 'KOSDAQ 평균보다')
+
+        analysis_items.append({
+            'key': metric['key'],
+            'label': metric['label'],
+            'status': status,
+            'status_label': 'Strong' if is_strong else 'Weak',
+            'message': message,
+            'score_gap': _round_score(score_gap),
+            'gap_magnitude': gap_magnitude,
+            'sort_order': index,
+        })
+
+    analysis_items.sort(key=lambda item: (-item['gap_magnitude'], item['sort_order']))
+    return analysis_items[:2]
+
+
+def _resolve_competitiveness_years(finance_df, stock_code, confirmed_years=None):
+    confirmed_years = [int(year) for year in (confirmed_years or [])]
+    target_row = _get_latest_confirmed_company_finance_row(finance_df, stock_code, confirmed_years)
+    if target_row is None:
+        return None
+
+    target_year = int(target_row['biz_year'])
+    industry_full_df = finance_df[finance_df['ind_code'] == target_row['ind_code']].copy()
+    industry_company_count = int(industry_full_df['stock_code'].nunique())
+    industry_df = industry_full_df[industry_full_df['biz_year'].isin(confirmed_years)].copy()
+
+    if industry_df.empty:
+        return None
+
+    same_year_peer_df = _get_unique_rows_for_year(industry_df, target_year)
+    same_year_peer_count = int(same_year_peer_df['stock_code'].nunique())
+
+    if industry_company_count <= 3:
+        common_year = _select_latest_year_with_min_companies(industry_df, industry_company_count)
+        comparison_peer_df = _get_unique_rows_for_year(industry_df, common_year)
+        if comparison_peer_df.empty:
+            comparison_peer_df = same_year_peer_df
+        return {
+            'company_row': target_row,
+            'company_year': target_year,
+            'peer_year': int(common_year) if common_year is not None else target_year,
+            'peer_df': comparison_peer_df,
+            'industry_company_count': industry_company_count,
+            'same_year_peer_count': same_year_peer_count,
+        }
+
+    if same_year_peer_count >= 3:
+        return {
+            'company_row': target_row,
+            'company_year': target_year,
+            'peer_year': target_year,
+            'peer_df': same_year_peer_df,
+            'industry_company_count': industry_company_count,
+            'same_year_peer_count': same_year_peer_count,
+        }
+
+    fallback_peer_year = _select_latest_year_with_min_companies(industry_df, 3)
+    fallback_peer_df = _get_unique_rows_for_year(industry_df, fallback_peer_year)
+    if fallback_peer_df.empty:
+        fallback_peer_df = same_year_peer_df
+
+    return {
+        'company_row': target_row,
+        'company_year': target_year,
+        'peer_year': int(fallback_peer_year) if fallback_peer_year is not None else target_year,
+        'peer_df': fallback_peer_df,
+        'industry_company_count': industry_company_count,
+        'same_year_peer_count': same_year_peer_count,
+    }
+
+
+def _build_competitiveness_radar_context(finance_df, stock_code, confirmed_years=None):
+    empty_context = _empty_competitiveness_radar_context(stock_code)
+    if finance_df is None or finance_df.empty:
+        return empty_context
+
+    if confirmed_years is None:
+        confirmed_years = _get_confirmed_competitiveness_years(
+            finance_df,
+            int(finance_df['stock_code'].nunique()),
+        )
+    else:
+        confirmed_years = [int(year) for year in confirmed_years]
+
+    resolved = _resolve_competitiveness_years(finance_df, stock_code, confirmed_years=confirmed_years)
+    if not resolved:
+        return empty_context
+
+    company_row = resolved['company_row']
+    peer_df = resolved['peer_df']
+    company_population_df = _get_unique_rows_for_year(finance_df, resolved['company_year'])
+    peer_population_df = _get_unique_rows_for_year(finance_df, resolved['peer_year'])
+    raw_peer_count = int(peer_df['stock_code'].nunique()) if not peer_df.empty else 0
+    uses_market_average_fallback = raw_peer_count <= 1
+    comparison_df = company_population_df if uses_market_average_fallback else peer_df
+    comparison_population_df = company_population_df if uses_market_average_fallback else peer_population_df
+    comparison_label = 'KOSDAQ 기업 평균' if uses_market_average_fallback else '피어그룹 평균'
+
+    metrics_payload = []
+    for metric in COMPETITIVENESS_METRICS:
+        key = metric['key']
+        label = metric['label']
+        higher_is_better = metric['higher_is_better']
+
+        company_value = company_row.get(key)
+        company_display = _format_percent_metric(company_value)
+        company_score = _calculate_percentile_score(
+            company_population_df[key],
+            company_value,
+            higher_is_better=higher_is_better,
+        )
+
+        comparison_scores = []
+        comparison_raw_values = comparison_df[key].dropna()
+        for comparison_value in comparison_raw_values:
+            comparison_score = _calculate_percentile_score(
+                comparison_population_df[key],
+                comparison_value,
+                higher_is_better=higher_is_better,
+            )
+            if comparison_score is not None:
+                comparison_scores.append(comparison_score)
+
+        peer_average_value = float(comparison_raw_values.mean()) if not comparison_raw_values.empty else None
+        peer_average_score = _round_score(sum(comparison_scores) / len(comparison_scores)) if comparison_scores else None
+
+        metrics_payload.append({
+            'key': key,
+            'label': label,
+            'label_with_value': f"{label}({company_display})",
+            'higher_is_better': higher_is_better,
+            'company_value': None if pd.isna(company_value) else float(company_value),
+            'company_display': company_display,
+            'company_score': company_score,
+            'peer_average_value': peer_average_value,
+            'peer_average_display': _format_percent_metric(peer_average_value),
+            'peer_average_score': peer_average_score,
+        })
+
+    available = any(metric['company_score'] is not None for metric in metrics_payload)
+    analysis_items = _build_competitiveness_analysis_items(
+        metrics_payload,
+        use_market_average=uses_market_average_fallback,
+    )
+
+    return {
+        'available': available,
+        'stock_code': stock_code,
+        'target_year': resolved['company_year'],
+        'peer_year': resolved['peer_year'],
+        'peer_count': raw_peer_count,
+        'industry_company_count': resolved['industry_company_count'],
+        'comparison_label': comparison_label,
+        'uses_market_average_fallback': uses_market_average_fallback,
+        'labels': [metric['label'] for metric in metrics_payload],
+        'labels_with_values': [metric['label_with_value'] for metric in metrics_payload],
+        'company_scores': [metric['company_score'] for metric in metrics_payload],
+        'peer_average_scores': [metric['peer_average_score'] for metric in metrics_payload],
+        'metrics': metrics_payload,
+        'analysis_items': analysis_items,
+    }
+
+
+def get_competitiveness_radar_context(stock_code):
+    try:
+        finance_df = _get_competitiveness_finance_dataframe()
+    except (OperationalError, ProgrammingError):
+        return _empty_competitiveness_radar_context(stock_code)
+
+    return _build_competitiveness_radar_context(
+        finance_df,
+        stock_code,
+        confirmed_years=_COMPETITIVENESS_CONFIRMED_YEARS,
+    )
 
 def home(request):
     count = Report.objects.count()
@@ -171,6 +601,7 @@ def finance(request, stock_code=None):
         'chart_data_json': chart_data,
         'peer_medians': peer_medians,
         'company_payout': company_payout,
+        'competitiveness_radar': get_competitiveness_radar_context(stock_code),
     }
     return render(request, 'finance.html', context)
 
