@@ -1070,7 +1070,13 @@ document.addEventListener("DOMContentLoaded", function() {
                     min: range.min,
                     max: range.max,
                     labels: { show: false },
-                    axisBorder: { show: false }
+                    axisBorder: { show: false },
+                    tooltip: {
+                        enabled: true,
+                        formatter: function(value) {
+                            return getDateLabelByX(value);
+                        }
+                    }
                 }
             }, false, false, false);
             setTimeout(() => {
@@ -1144,7 +1150,13 @@ document.addEventListener("DOMContentLoaded", function() {
             xaxis: {
                 type: 'numeric',
                 labels: { show: false },
-                axisBorder: { show: false }
+                axisBorder: { show: false },
+                tooltip: {
+                    enabled: true,
+                    formatter: function(value) {
+                        return getDateLabelByX(value);
+                    }
+                }
             },
             yaxis: { tooltip: { enabled: false }, labels: { formatter: (val) => Math.round(val).toLocaleString() } },
             tooltip: {
