@@ -51,4 +51,5 @@ DB_NAME=
 # KRX (한국거래소) 접속 정보
 ID=
 PW=
+KRX_AUTH_KEY=
 ```
