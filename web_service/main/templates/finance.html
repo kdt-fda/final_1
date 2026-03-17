@@ -661,10 +661,13 @@
     <section class="section-block">
         <h2 class="card-title">가치평가지표</h2>
         <div class="card grid-2-col">
-            <div class="metric-item{% if valuation_alerts.pbr_is_complete_capital_impairment %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.pbr_is_complete_capital_impairment or pbr_info_missing %} is-warning-state{% endif %}">
                 {% if valuation_alerts.pbr_is_complete_capital_impairment %}
                 <div class="metric-badge is-warning">PBR</div>
                 <div class="metric-desc is-warning">완전자본잠식 상태로, 누적 손실로 인해 부채가 자산을 초과합니다.<br>PBR 지표를 표시할 수 없습니다.</div>
+                {% elif pbr_info_missing %}
+                <div class="metric-badge is-warning">PBR</div>
+                <div class="metric-desc is-warning">확인 가능한 PBR 정보가 없습니다.</div>
                 {% else %}
                 <div class="metric-badge">PBR</div>
                 <div class="metric-desc">주가가 기업의 순자산 대비 몇 배로 평가되는지를 보여주는 지표</div>
@@ -686,10 +689,13 @@
                 {% endif %}
             </div>
 
-            <div class="metric-item{% if valuation_alerts.per_is_net_loss %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss or per_info_missing %} is-warning-state{% endif %}">
                 {% if valuation_alerts.per_is_net_loss %}
                 <div class="metric-badge is-warning">PER</div>
                 <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>PER 지표를 표시할 수 없습니다.</div>
+                {% elif per_info_missing %}
+                <div class="metric-badge is-warning">PER</div>
+                <div class="metric-desc is-warning">확인 가능한 PER 정보가 없습니다.</div>
                 {% else %}
                 <div class="metric-badge">PER</div>
                 <div class="metric-desc">주가가 기업의 순이익 대비 몇 배로 거래되는지를 보여주는 지표</div>
@@ -716,7 +722,11 @@
     <section class="section-block">
         <h2 class="card-title">배당 지표</h2>
         <div class="card grid-2-col">
-            <div class="metric-item">
+            <div class="metric-item{% if dividend_info_missing %} is-warning-state{% endif %}">
+                {% if dividend_info_missing %}
+                <div class="metric-badge is-warning">배당수익률</div>
+                <div class="metric-desc is-warning">확인 가능한 배당수익률 정보가 없습니다.</div>
+                {% else %}
                 <div class="metric-badge">배당수익률</div>
                 <div class="metric-desc">투자자가 현재 주가 기준으로 받을 수 있는 배당 수준을 보여주는 지표</div>
                 
@@ -734,12 +744,16 @@
                         <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 45%;"></div></div>
                     </div>
                 </div>
+                {% endif %}
             </div>
 
-            <div class="metric-item{% if valuation_alerts.per_is_net_loss %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss or payout_info_missing %} is-warning-state{% endif %}">
                 {% if valuation_alerts.per_is_net_loss %}
                 <div class="metric-badge is-warning">배당 성향</div>
                 <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>배당 성향 지표를 표시할 수 없습니다.</div>
+                {% elif payout_info_missing %}
+                <div class="metric-badge is-warning">배당 성향</div>
+                <div class="metric-desc is-warning">확인 가능한 배당 성향 정보가 없습니다.</div>
                 {% else %}
                 <div class="metric-badge">배당 성향</div>
                 <div class="metric-desc">기업이 벌어들인 이익 중 얼마를 주주에게 배당하는지 보여주는 지표</div>
