@@ -58,44 +58,423 @@
         .chart-layout {
             display: grid;
             grid-template-columns: 2fr 1fr; /* 좌측 차트, 우측 가격범위 */
-            gap: 40px;
+            gap: 56px;
             align-items: start;
+        }
+        .empty-stock-card {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+            text-align: center;
+            color: #555;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        .chart-panel { min-width: 0; }
+        .chart-panel-header {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 18px;
+        }
+
+        .chart-period-tabs {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            width: 100%;
+            border-bottom: 1px solid #ececec;
+            padding-bottom: 2px;
+        }
+        .chart-period-button {
+            position: relative;
+            border: 0;
+            background: transparent;
+            color: #6f6f6f;
+            cursor: pointer;
+            font: inherit;
+            font-size: 1.05rem;
+            font-weight: 500;
+            padding: 0 28px 14px;
+            transition: color 0.2s ease;
+        }
+        .chart-period-button:hover { color: #222; }
+        .chart-period-button + .chart-period-button { border-left: 1px solid #d9d9d9; }
+        .chart-period-button.is-active {
+            color: #111;
+            font-weight: 800;
+        }
+        .chart-period-button.is-active::after {
+            content: '';
+            position: absolute;
+            left: 18px;
+            right: 18px;
+            bottom: -3px;
+            height: 4px;
+            border-radius: 999px 999px 0 0;
+            background: #111;
+        }
+        .chart-period-button:focus-visible {
+            outline: 2px solid #111;
+            outline-offset: 4px;
+            border-radius: 8px;
+        }
+        .chart-period-button:disabled {
+            cursor: default;
+            opacity: 0.45;
         }
 
         /* 우측 주가(기준일) 영역 스타일 */
-        .price-range-container { display: flex; flex-direction: column; gap: 30px; }
-        .price-title { font-size: 1.4rem; font-weight: bold; color: #222; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;}
-        .price-badge { font-size: 0.9rem; font-weight: bold; background: #eee; padding: 4px 12px; border-radius: 12px; color: #555; }
+        .price-range-container { display: flex; flex-direction: column; gap: 42px; padding-left: 12px; }
+        .price-title { font-size: 1.1rem; font-weight: 700; color: #222; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;}
+        .price-badge { font-size: 1rem; font-weight: 600; background: #eee; padding: 4px 12px; border-radius: 12px; color: #555; }
         
-        .range-box { position: relative; margin-top: 10px; }
-        .range-labels { display: flex; justify-content: space-between; font-size: 1.1rem; margin-bottom: 8px; font-weight: bold;}
-        .range-values { display: flex; justify-content: space-between; font-size: 1.2rem; margin-bottom: 5px; color: #444; }
-        .range-bar-bg { width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; position: relative; margin-top: 10px;}
+        .range-box { position: relative; margin-top: 6px; }
+        .range-box + .range-box { margin-top: 34px; }
+        .range-labels { display: flex; justify-content: space-between; font-size: 1rem; margin-bottom: 6px; font-weight: 700;}
+        .range-values { display: flex; justify-content: space-between; font-size: 1rem; margin-bottom: 8px; color: #444; line-height: 1.5; }
+        .range-bar-bg { width: 100%; height: 10px; background: #e0e0e0; border-radius: 999px; position: relative; margin-top: 10px;}
         .range-marker {
-            position: absolute; width: 16px; height: 16px; background: #007bff; border-radius: 50%;
-            top: 50%; transform: translate(-50%, -50%); box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index: 2;
+            position: absolute; width: 8px; height: 8px; background: #1677ff; border-radius: 50%;
+            top: 50%; transform: translate(-50%, -50%); box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18); z-index: 2;
         }
         .marker-label {
-            position: absolute; top: 22px; left: 50%; transform: translateX(-50%);
-            background: #007bff; color: #fff; padding: 4px 10px; border-radius: 4px;
-            font-size: 1.0rem; font-weight: bold; white-space: nowrap;
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: #fff; color: #111; padding: 6px 12px; border-radius: 12px;
+            font-size: 1.0rem; font-weight: 700; white-space: nowrap; box-shadow: 0 0 18px rgba(17, 24, 39, 0.14);
         }
         .marker-label::after {
             content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-            border-width: 5px; border-style: solid; border-color: transparent transparent #007bff transparent;
+            border-width: 6px; border-style: solid; border-color: transparent transparent #fff transparent;
+            filter: drop-shadow(0 0 6px rgba(17, 24, 39, 0.10));
         }
-        .missing-data-text { font-size: 1.1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
+        .missing-data-text { font-size: 1rem; color: #888; line-height: 1.6; text-align: center; margin-top: 30px; padding: 20px; background: #f9f9f9; border-radius: 12px;}
+        .volume-hover-tooltip {
+            position: fixed;
+            z-index: 9999;
+            display: none;
+            pointer-events: none;
+            transform: translate(-50%, calc(-100% - 10px));
+        }
+        .volume-hover-tooltip.is-visible { display: block; }
+        .volume-hover-tooltip-card {
+            padding: 10px;
+            border: 1px solid #ddd;
+            background: #fff;
+            border-radius: 5px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 200px;
+        }
+        .volume-hover-tooltip-date {
+            margin-bottom: 6px;
+            font-weight: bold;
+            color: #111;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 4px;
+            text-align: center;
+        }
+        .volume-hover-tooltip-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .volume-hover-tooltip-row + .volume-hover-tooltip-row { margin-top: 4px; }
+
+        .competitiveness-card {
+            padding: 58px 40px 42px;
+        }
+        .competitiveness-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+            gap: 28px;
+            align-items: start;
+        }
+        .competitiveness-chart-column {
+            min-width: 0;
+            padding-top: 12px;
+        }
+        #competitiveness-radar-chart {
+            min-height: 300px;
+            max-width: 560px;
+            margin: 0 auto;
+        }
+        .competitiveness-radar-svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+        .competitiveness-legend {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            flex-wrap: wrap;
+            margin: 6px auto 0;
+            max-width: 560px;
+        }
+        .competitiveness-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            color: #4a4a4a;
+        }
+        .competitiveness-legend-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            background: rgba(46, 102, 255, 0.16);
+            border: 3px solid #2f66ff;
+            box-sizing: border-box;
+        }
+        .competitiveness-legend-swatch.peer {
+            background: rgba(129, 140, 160, 0.14);
+            border-color: #8b94a8;
+        }
+        .competitiveness-caption {
+            width: 100%;
+            margin-top: 36px;
+            text-align: left;
+        }
+        .competitiveness-source-note {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.9rem;
+            color: #888;
+            font-weight: 500;
+            line-height: 1.5;
+        }
+        .competitiveness-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 22px;
+            padding-top: 96px;
+        }
+        .competitiveness-result-heading {
+            margin: 0;
+            font-size: 1.5rem;
+            line-height: 1.35;
+            font-weight: 700;
+            color: #111;
+            letter-spacing: 0;
+        }
+        .competitiveness-analysis-list {
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .competitiveness-analysis-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .competitiveness-analysis-head {
+            min-width: 140px;
+        }
+        .competitiveness-analysis-status {
+            display: block;
+            font-size: 1.05rem;
+            line-height: 1.4;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .competitiveness-analysis-status.is-strong {
+            color: #1677ff;
+        }
+        .competitiveness-analysis-status.is-weak {
+            color: #8a94a6;
+        }
+        .competitiveness-analysis-metric {
+            display: block;
+            margin-top: 2px;
+            font-size: 1.05rem;
+            line-height: 1.35;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        .competitiveness-analysis-metric.is-strong {
+            color: #14345f;
+        }
+        .competitiveness-analysis-metric.is-weak {
+            color: #4b5565;
+        }
+        .competitiveness-analysis-text {
+            flex: 1;
+            font-size: 1.05rem;
+            line-height: 1.55;
+            font-weight: 500;
+            color: #111827;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+        .competitiveness-analysis-empty {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #667085;
+            font-weight: 600;
+        }
+        .competitiveness-pill {
+            display: inline-flex;
+            align-self: flex-start;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: #eef4ff;
+            color: #2f66ff;
+            font-size: 0.9rem;
+            font-weight: 800;
+            letter-spacing: 0.02em;
+        }
+        .competitiveness-heading {
+            margin: 0;
+            font-size: 1.9rem;
+            line-height: 1.25;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.03em;
+        }
+        .competitiveness-desc {
+            margin: 0;
+            color: #606a7a;
+            font-size: 1rem;
+            line-height: 1.7;
+        }
+        .competitiveness-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .competitiveness-summary-item {
+            border-radius: 18px;
+            padding: 18px 18px 16px;
+            background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+            box-shadow: 0 0 18px rgba(15, 23, 42, 0.08);
+        }
+        .competitiveness-summary-label {
+            display: block;
+            color: #7a8596;
+            font-size: 0.92rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .competitiveness-summary-value {
+            display: block;
+            color: #111827;
+            font-size: 1.3rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+        }
+        .competitiveness-summary-subtext {
+            display: block;
+            margin-top: 6px;
+            color: #8b94a8;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+        .competitiveness-empty {
+            min-height: 260px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #666;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .competitiveness-chart-error {
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #666;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        .competitiveness-radar-hit {
+            cursor: pointer;
+        }
+        .competitiveness-radar-tooltip {
+            position: fixed;
+            z-index: 10000;
+            display: none;
+            pointer-events: none;
+            transform: translate(-50%, calc(-100% - 14px));
+        }
+        .competitiveness-radar-tooltip.is-visible { display: block; }
+        .competitiveness-radar-tooltip-card {
+            min-width: 220px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+            border: 1px solid rgba(218, 226, 237, 0.9);
+        }
+        .competitiveness-radar-tooltip-title {
+            margin-bottom: 8px;
+            padding-bottom: 7px;
+            border-bottom: 1px solid #edf2f7;
+            color: #111827;
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
+        .competitiveness-radar-tooltip-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 16px;
+            color: #4b5563;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .competitiveness-radar-tooltip-row + .competitiveness-radar-tooltip-row { margin-top: 4px; }
+        .competitiveness-radar-tooltip-value {
+            color: #111827;
+            font-weight: 700;
+            text-align: right;
+        }
 
         /* 하단 지표 2분할 레이아웃 */
         .grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
         
         /* 개별 지표 카드 내부 스타일 */
         .metric-item { display: flex; flex-direction: column; gap: 10px; }
-        .metric-badge { 
-            align-self: flex-start; border: 1px solid #333; border-radius: 20px; 
-            padding: 5px 20px; font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;
+        .metric-item.is-warning-state {
+            min-height: 210px;
         }
-        .metric-desc { font-size: 1.1rem; color: #555; line-height: 1.5; margin-bottom: 15px;}
+        .metric-badge { 
+            align-self: flex-start; border: none; border-radius: 20px; 
+            padding: 5px 20px; font-weight: bold; font-size: 1.1rem; margin-bottom: 5px;
+            background: #fff; box-shadow: 0 0 24px rgba(17, 24, 39, 0.10);
+        }
+        .metric-item.is-warning-state .metric-badge {
+            align-self: flex-start;
+        }
+        .metric-badge.is-warning {
+            background: #fff2bf;
+            color: #7d5d12;
+            box-shadow: 0 0 24px rgba(157, 125, 30, 0.14);
+        }
+        .metric-desc {
+            font-size: 1.1rem;
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 15px;
+            white-space: normal;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+        .metric-desc.is-warning {
+            color: #7d5d12;
+        }
+        .metric-item.is-warning-state .metric-desc {
+            align-self: center;
+            margin: auto 0;
+            max-width: 320px;
+            text-align: center;
+        }
         
         .metric-row { display: grid; grid-template-columns: 80px 1fr; align-items: center; gap: 15px; margin-bottom: 10px;}
         .metric-label { font-weight: bold; font-size: 1.1rem; color: #333; }
@@ -105,7 +484,36 @@
         .bar-visual-fill { height: 100%; border-radius: 5px; }
         .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
         .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
-    </style>
+        #volume-chart .apexcharts-selection-rect { cursor: grab; }
+
+        @media (max-width: 960px) {
+            .container { padding: 32px 24px 48px; }
+            .chart-layout { grid-template-columns: 1fr; }
+            .price-range-container { padding-left: 0; }
+            .competitiveness-layout { grid-template-columns: 1fr; }
+            .competitiveness-summary-grid { grid-template-columns: 1fr 1fr; }
+            .competitiveness-chart-column { padding-top: 0; }
+            .competitiveness-meta { padding-top: 20px; }
+            .chart-period-tabs {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+            .chart-period-button { flex: 0 0 auto; }
+        }
+        @media (max-width: 640px) {
+            .competitiveness-card {
+                padding: 36px 24px 30px;
+            }
+            .competitiveness-summary-grid { grid-template-columns: 1fr; }
+            #competitiveness-radar-chart { min-height: 300px; }
+            .competitiveness-analysis-item {
+                gap: 12px;
+            }
+            .competitiveness-analysis-head {
+                min-width: 110px;
+            }
+        }
+</style>
 </head>
 <body>
 
@@ -128,16 +536,27 @@
     </section>
 
     <section class="section-block">
+        <h2 class="card-title">주가</h2>
+        {% if latest_stock and chart_data_json %}
         <div class="card chart-layout">
-            <div style="min-width: 0;"> <!-- 차트 영역 최소 너비 보장 -->
-                <h3 style="margin-top:0;">동적 테이블(최근 90일)</h3>
+            <div class="chart-panel">
+                    <div class="chart-panel-header">
+                        <div class="chart-period-tabs" role="group" aria-label="차트 기간 선택">
+                            <button type="button" class="chart-period-button" data-period="7" aria-pressed="false">7일</button>
+                            <button type="button" class="chart-period-button" data-period="15" aria-pressed="false">15일</button>
+                            <button type="button" class="chart-period-button" data-period="30" aria-pressed="false">30일</button>
+                            <button type="button" class="chart-period-button" data-period="60" aria-pressed="false">60일</button>
+                            <button type="button" class="chart-period-button" data-period="90" aria-pressed="false">90일</button>
+                        </div>
+                    </div>
                 <div id="candlestick-chart"></div>
                 <div id="volume-chart"></div>
+
                 <div style="font-size: 0.9rem; color:#888; margin-top:10px;">자료: 한국거래소 시장정보</div>
             </div>
 
             <div class="price-range-container">
-                <div class="price-title">주가(기준일) <span class="price-badge">{{ latest_stock.reference_date|date:"Y-m-d"|default:"데이터 없음" }} 종가</span></div>
+                <div class="price-title">최저/최고가 비교 <span class="price-badge">{{ latest_stock.reference_date|date:"Y-m-d"|default:"데이터 없음" }} 종가</span></div>
                 
                 {% if latest_stock %}
                     <div class="range-box">
@@ -154,7 +573,7 @@
                     </div>
 
                     {% if latest_stock.wk52_low != None and latest_stock.wk52_high != None %}
-                    <div class="range-box" style="margin-top: 20px;">
+                    <div class="range-box">
                         <div class="range-labels"><span>1년 최저가</span><span>1년 최고가</span></div>
                         <div class="range-values"><span>{{ latest_stock.wk52_low|intcomma }}원</span><span>{{ latest_stock.wk52_high|intcomma }}원</span></div>
                         <div class="range-bar-bg">
@@ -174,35 +593,82 @@
                 {% endif %}
             </div>
         </div>
+        {% else %}
+        <div class="card empty-stock-card">
+            <div>* 주가 데이터가 존재하지 않습니다.</div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="section-block">
+        <h2 class="card-title">기업 경쟁력 분석</h2>
+        <div class="card competitiveness-card">
+            {% if competitiveness_radar.available %}
+            <div class="competitiveness-layout">
+                <div class="competitiveness-chart-column">
+                    <div id="competitiveness-radar-chart"></div>
+                    <div class="competitiveness-legend">
+                        <span class="competitiveness-legend-item">
+                            <span class="competitiveness-legend-swatch"></span>
+                            {{ company.corp_name }}
+                        </span>
+                        <span class="competitiveness-legend-item">
+                            <span class="competitiveness-legend-swatch peer"></span>
+                            {{ competitiveness_radar.comparison_label|default:"피어그룹 평균" }}
+                        </span>
+                    </div>
+                    <div class="competitiveness-caption">
+                        <span class="competitiveness-source-note">※ 괄호 안은 실제 수치 ({{ competitiveness_radar.target_year|default:"-" }}년 기준)</span>
+                        {% if competitiveness_radar.uses_market_average_fallback %}
+                        <span class="competitiveness-source-note">※ 해당 기업의 피어그룹 데이터 부족으로 전체 산업 평균 데이터가 표시되었습니다.</span>
+                        {% else %}
+                        {% if competitiveness_radar.peer_year and competitiveness_radar.peer_year != competitiveness_radar.target_year %}
+                        <span class="competitiveness-source-note">※ 피어그룹 평균 점수는 {{ competitiveness_radar.peer_year }}년 동종업종 기준</span>
+                        {% endif %}
+                        <span class="competitiveness-source-note">※ 피어그룹 선정 기준: 전체 KOSDAQ 기업 내 표준산업분류 중분류가 동일한 기업 {{ competitiveness_radar.peer_count|default:0 }}개</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="competitiveness-meta">
+                    <h3 class="competitiveness-result-heading">{{ company.corp_name }} 경쟁력 분석 결과</h3>
+                    {% if competitiveness_radar.analysis_items %}
+                    <div class="competitiveness-analysis-list">
+                        {% for item in competitiveness_radar.analysis_items %}
+                        <div class="competitiveness-analysis-item">
+                            <div class="competitiveness-analysis-head">
+                                <span class="competitiveness-analysis-status {% if item.status == 'strong' %}is-strong{% else %}is-weak{% endif %}">{{ item.status_label }}</span>
+                                <span class="competitiveness-analysis-metric {% if item.status == 'strong' %}is-strong{% else %}is-weak{% endif %}">{{ item.label }}</span>
+                            </div>
+                            <span class="competitiveness-analysis-text">{{ item.message }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="competitiveness-analysis-empty">
+                        경쟁력 비교 결과를 표시할 수 있는 지표가 아직 충분하지 않습니다.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="competitiveness-empty">
+                * 기업 경쟁력 분석을 위한 재무 데이터가 충분하지 않습니다.
+            </div>
+            {% endif %}
+        </div>
     </section>
 
     <section class="section-block">
         <h2 class="card-title">가치평가지표</h2>
         <div class="card grid-2-col">
-            <div class="metric-item">
-                <div class="metric-badge">PER</div>
-                <div class="metric-desc">주가가 기업의 순이익 대비 몇 배로 거래되는지를 보여주는 지표입니다.</div>
-                
-                <div class="metric-row">
-                    <span class="metric-label">{{ company.corp_name }}</span>
-                    <div class="metric-bar-wrap">
-                        <span class="metric-value-text">{{ latest_stock.per|default:"-" }}배</span>
-                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 70%;"></div></div>
-                    </div>
-                </div>
-                <div class="metric-row">
-                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
-                    <div class="metric-bar-wrap">
-                        <span class="metric-value-text">{{ peer_medians.per }}배</span>
-                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 40%;"></div></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="metric-item">
+            <div class="metric-item{% if valuation_alerts.pbr_is_complete_capital_impairment %} is-warning-state{% endif %}">
+                {% if valuation_alerts.pbr_is_complete_capital_impairment %}
+                <div class="metric-badge is-warning">PBR</div>
+                <div class="metric-desc is-warning">완전자본잠식 상태로, 누적 손실로 인해 부채가 자산을 초과합니다.<br>PBR 지표를 표시할 수 없습니다.</div>
+                {% else %}
                 <div class="metric-badge">PBR</div>
-                <div class="metric-desc">주가가 기업의 순자산 대비 몇 배로 평가되는지를 보여주는 지표입니다.</div>
-                
+                <div class="metric-desc">주가가 기업의 순자산 대비 몇 배로 평가되는지를 보여주는 지표</div>
+
                 <div class="metric-row">
                     <span class="metric-label">{{ company.corp_name }}</span>
                     <div class="metric-bar-wrap">
@@ -217,6 +683,32 @@
                         <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 30%;"></div></div>
                     </div>
                 </div>
+                {% endif %}
+            </div>
+
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss %} is-warning-state{% endif %}">
+                {% if valuation_alerts.per_is_net_loss %}
+                <div class="metric-badge is-warning">PER</div>
+                <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>PER 지표를 표시할 수 없습니다.</div>
+                {% else %}
+                <div class="metric-badge">PER</div>
+                <div class="metric-desc">주가가 기업의 순이익 대비 몇 배로 거래되는지를 보여주는 지표</div>
+
+                <div class="metric-row">
+                    <span class="metric-label">{{ company.corp_name }}</span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ latest_stock.per|default:"-" }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-company" style="width: 70%;"></div></div>
+                    </div>
+                </div>
+                <div class="metric-row">
+                    <span class="metric-label">피어그룹<br>중앙값<br><span style="font-size: 0.9em; font-weight: normal; color: #777;">({{ peer_medians.count }}개 기업)</span></span>
+                    <div class="metric-bar-wrap">
+                        <span class="metric-value-text">{{ peer_medians.per }}배</span>
+                        <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 40%;"></div></div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </section>
@@ -226,7 +718,7 @@
         <div class="card grid-2-col">
             <div class="metric-item">
                 <div class="metric-badge">배당수익률</div>
-                <div class="metric-desc">투자가가 현재 주가 기준으로 받을 수 있는 배당 수준을 보여주는 지표입니다.</div>
+                <div class="metric-desc">투자자가 현재 주가 기준으로 받을 수 있는 배당 수준을 보여주는 지표</div>
                 
                 <div class="metric-row">
                     <span class="metric-label">{{ company.corp_name }}</span>
@@ -244,9 +736,13 @@
                 </div>
             </div>
 
-            <div class="metric-item">
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss %} is-warning-state{% endif %}">
+                {% if valuation_alerts.per_is_net_loss %}
+                <div class="metric-badge is-warning">배당 성향</div>
+                <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>배당 성향 지표를 표시할 수 없습니다.</div>
+                {% else %}
                 <div class="metric-badge">배당 성향</div>
-                <div class="metric-desc">기업이 벌어들인 이익 중 얼마를 주주에게 배당하는지 보여주는 지표입니다.</div>
+                <div class="metric-desc">기업이 벌어들인 이익 중 얼마를 주주에게 배당하는지 보여주는 지표</div>
                 
                 <div class="metric-row">
                     <span class="metric-label">{{ company.corp_name }}</span>
@@ -262,55 +758,527 @@
                         <div class="bar-visual-bg"><div class="bar-visual-fill fill-peer" style="width: 35%;"></div></div>
                     </div>
                 </div>
+                {% endif %}
             </div>
         </div>
     </section>
 </div>
 
 {{ chart_data_json|json_script:"chart-data" }}
+{{ competitiveness_radar|json_script:"competitiveness-radar-data" }}
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    // 1. 차트 데이터 로드
-    const rawData = JSON.parse(document.getElementById('chart-data').textContent);
-    
-    if (rawData && rawData.length > 0) {
-        // 1. 공통 데이터 전처리
-        // 캔들 차트 포맷: {x: 날짜문자열, y: [시가, 고가, 저가, 종가]}
-        const candleSeriesData = rawData.map(item => {
-            return {
-                x: item.date,
-                y: [item.open, item.high, item.low, item.close]
-            };
+    const chartDataElement = document.getElementById('chart-data');
+    const rawData = chartDataElement ? JSON.parse(chartDataElement.textContent) : [];
+    const competitivenessDataElement = document.getElementById('competitiveness-radar-data');
+    const competitivenessRadarData = competitivenessDataElement ? JSON.parse(competitivenessDataElement.textContent) : null;
+    const periodButtons = Array.from(document.querySelectorAll('.chart-period-button'));
+    const maxWindowDays = 90;
+    const maxData = rawData.slice(-Math.min(maxWindowDays, rawData.length));
+    const companyName = "{{ company.corp_name|escapejs }}";
+    let candleChart = null;
+    let volumeChart = null;
+    let isApplyingPreset = false;
+    let isSyncingViewport = false;
+    let isSyncingBrushSelection = false;
+    let currentViewportRange = null;
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function formatCompetitivenessScore(value) {
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) ? `${numericValue.toFixed(1)}점` : '-';
+    }
+
+    function parseMetricNumericValue(text) {
+        const normalizedText = String(text ?? '')
+            .replace(/,/g, '')
+            .trim();
+        const match = normalizedText.match(/-?\d+(?:\.\d+)?/);
+        if (!match) return null;
+
+        const numericValue = Number(match[0]);
+        return Number.isFinite(numericValue) ? numericValue : null;
+    }
+
+    function updateMetricBars() {
+        document.querySelectorAll('.metric-item').forEach(metricItem => {
+            const metricRows = Array.from(metricItem.querySelectorAll('.metric-row'));
+            if (!metricRows.length) return;
+
+            const rowData = metricRows.map(row => {
+                const valueText = row.querySelector('.metric-value-text')?.textContent ?? '';
+                const fill = row.querySelector('.bar-visual-fill');
+                return {
+                    fill,
+                    value: parseMetricNumericValue(valueText)
+                };
+            });
+
+            const validValues = rowData
+                .map(item => item.value)
+                .filter(value => value !== null)
+                .map(value => Math.abs(value));
+
+            const maxValue = validValues.length ? Math.max(...validValues) : 0;
+
+            rowData.forEach(item => {
+                if (!item.fill) return;
+
+                if (item.value === null || maxValue <= 0) {
+                    item.fill.style.width = '0%';
+                    item.fill.style.opacity = '0.2';
+                    return;
+                }
+
+                const relativeWidth = (Math.abs(item.value) / maxValue) * 100;
+                const width = Math.max(relativeWidth, 12);
+                item.fill.style.width = `${Math.min(width, 100)}%`;
+                item.fill.style.opacity = '1';
+            });
+        });
+    }
+
+    function ensureCompetitivenessTooltip() {
+        let tooltip = document.getElementById('competitiveness-radar-tooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'competitiveness-radar-tooltip';
+            tooltip.className = 'competitiveness-radar-tooltip';
+            document.body.appendChild(tooltip);
+        }
+        return tooltip;
+    }
+
+    function renderCompetitivenessRadar() {
+        const chartElement = document.querySelector('#competitiveness-radar-chart');
+        if (!chartElement || !competitivenessRadarData || !competitivenessRadarData.available) return;
+
+        const labels = competitivenessRadarData.labels_with_values || competitivenessRadarData.labels || [];
+        const companyScores = (competitivenessRadarData.company_scores || []).map(value => {
+            const numericValue = Number(value);
+            return Number.isFinite(numericValue) ? Math.max(0, Math.min(100, numericValue)) : 0;
+        });
+        const comparisonLabel = competitivenessRadarData.comparison_label || '피어그룹 평균';
+        const peerAverageScores = (competitivenessRadarData.peer_average_scores || []).map(value => {
+            const numericValue = Number(value);
+            return Number.isFinite(numericValue) ? Math.max(0, Math.min(100, numericValue)) : 0;
         });
 
-        // 거래량 차트 포맷: {x: 날짜문자열, y: 거래량, tradingValue: 거래대금}
-        const volumeSeriesData = rawData.map(item => {
+        if (!labels.length || !companyScores.length || !peerAverageScores.length) {
+            chartElement.innerHTML = '<div class="competitiveness-chart-error">* 레이더 차트를 불러오지 못했습니다.</div>';
+            return;
+        }
+
+        const width = 620;
+        const height = 340;
+        const centerX = 286;
+        const centerY = 176;
+        const radius = 110;
+        const labelRadius = 170;
+        const tickLevels = [20, 40, 60, 80, 100];
+        const axisCount = labels.length;
+        const startAngle = -Math.PI / 2;
+        const metrics = competitivenessRadarData.metrics || [];
+
+        function getPoint(value, index, scale = 1) {
+            const angle = startAngle + (Math.PI * 2 * index / axisCount);
+            const normalizedValue = (value / 100) * radius * scale;
             return {
-                x: item.date,
+                x: centerX + Math.cos(angle) * normalizedValue,
+                y: centerY + Math.sin(angle) * normalizedValue,
+            };
+        }
+
+        function getPolygonPoints(level) {
+            return labels.map((_, index) => {
+                const point = getPoint(level, index);
+                return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+            }).join(' ');
+        }
+
+        function getSeriesPoints(values) {
+            return values.map((value, index) => {
+                const point = getPoint(value, index);
+                return `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+            }).join(' ');
+        }
+
+        const gridPolygons = tickLevels.map(level => `
+            <polygon points="${getPolygonPoints(level)}" fill="none" stroke="#dbe3ee" stroke-width="1.2"></polygon>
+        `).join('');
+
+        const axes = labels.map((_, index) => {
+            const endPoint = getPoint(100, index, 1.03);
+            return `<line x1="${centerX}" y1="${centerY}" x2="${endPoint.x}" y2="${endPoint.y}" stroke="#dbe3ee" stroke-width="1.2"></line>`;
+        }).join('');
+
+        const axisLabels = labels.map((label, index) => {
+            const angle = startAngle + (Math.PI * 2 * index / axisCount);
+            const point = {
+                x: centerX + Math.cos(angle) * labelRadius,
+                y: centerY + Math.sin(angle) * labelRadius,
+            };
+
+            let anchor = 'middle';
+            if (point.x < centerX - 18) anchor = 'end';
+            if (point.x > centerX + 18) anchor = 'start';
+
+            let baseline = 'middle';
+            if (point.y < centerY - radius + 18) baseline = 'hanging';
+            if (point.y > centerY + radius - 18) baseline = 'ideographic';
+
+            return `<text class="competitiveness-radar-target competitiveness-radar-hit" data-index="${index}" x="${point.x}" y="${point.y}" text-anchor="${anchor}" dominant-baseline="${baseline}" fill="#30343c" font-size="15.5" font-weight="600">${escapeHtml(label)}</text>`;
+        }).join('');
+
+        const tickLabels = tickLevels.map(level => {
+            const point = getPoint(level, 0);
+            return `<text x="${centerX + 8}" y="${point.y + 5}" fill="#7a8596" font-size="13" font-weight="600">${level}</text>`;
+        }).join('');
+
+        const peerPoints = peerAverageScores.map((value, index) => {
+            const point = getPoint(value, index);
+            return `<circle cx="${point.x}" cy="${point.y}" r="4" fill="#8b94a8" pointer-events="none"></circle>`;
+        }).join('');
+
+        const companyPoints = companyScores.map((value, index) => {
+            const point = getPoint(value, index);
+            return `<circle cx="${point.x}" cy="${point.y}" r="4.5" fill="#2f66ff" pointer-events="none"></circle>`;
+        }).join('');
+
+        const peerHitAreas = peerAverageScores.map((value, index) => {
+            const point = getPoint(value, index);
+            return `<circle class="competitiveness-radar-target competitiveness-radar-hit" data-index="${index}" data-series="peer" cx="${point.x}" cy="${point.y}" r="14" fill="transparent"></circle>`;
+        }).join('');
+
+        const companyHitAreas = companyScores.map((value, index) => {
+            const point = getPoint(value, index);
+            return `<circle class="competitiveness-radar-target competitiveness-radar-hit" data-index="${index}" data-series="company" cx="${point.x}" cy="${point.y}" r="14" fill="transparent"></circle>`;
+        }).join('');
+
+        chartElement.innerHTML = `
+            <svg class="competitiveness-radar-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(companyName)} 기업 경쟁력 레이더 차트">
+                ${gridPolygons}
+                ${axes}
+                ${tickLabels}
+                <polygon points="${getSeriesPoints(peerAverageScores)}" fill="rgba(139, 148, 168, 0.14)" stroke="#8b94a8" stroke-width="2"></polygon>
+                ${peerHitAreas}
+                ${peerPoints}
+                <polygon points="${getSeriesPoints(companyScores)}" fill="rgba(47, 102, 255, 0.22)" stroke="#2f66ff" stroke-width="3"></polygon>
+                ${companyHitAreas}
+                ${companyPoints}
+                ${axisLabels}
+            </svg>
+        `;
+
+        const tooltip = ensureCompetitivenessTooltip();
+
+        function hideTooltip() {
+            tooltip.classList.remove('is-visible');
+            tooltip.innerHTML = '';
+        }
+
+        function showTooltip(event) {
+            const metricIndex = Number(event.currentTarget.dataset.index);
+            const metric = metrics[metricIndex];
+            if (!metric) {
+                hideTooltip();
+                return;
+            }
+
+            tooltip.innerHTML = `
+                <div class="competitiveness-radar-tooltip-card">
+                    <div class="competitiveness-radar-tooltip-title">${escapeHtml(metric.label)}</div>
+                    <div class="competitiveness-radar-tooltip-row">
+                        <span>${escapeHtml(companyName)}</span>
+                        <span class="competitiveness-radar-tooltip-value">${escapeHtml(metric.company_display)} / ${escapeHtml(formatCompetitivenessScore(metric.company_score))}</span>
+                    </div>
+                    <div class="competitiveness-radar-tooltip-row">
+                        <span>${escapeHtml(comparisonLabel)}</span>
+                        <span class="competitiveness-radar-tooltip-value">${escapeHtml(metric.peer_average_display || '-')} / ${escapeHtml(formatCompetitivenessScore(metric.peer_average_score))}</span>
+                    </div>
+                </div>
+            `;
+            tooltip.style.left = `${event.clientX}px`;
+            tooltip.style.top = `${event.clientY}px`;
+            tooltip.classList.add('is-visible');
+        }
+
+        chartElement.querySelectorAll('.competitiveness-radar-target').forEach(target => {
+            target.addEventListener('mouseenter', showTooltip);
+            target.addEventListener('mousemove', showTooltip);
+            target.addEventListener('mouseleave', hideTooltip);
+        });
+    }
+
+    function formatShortDate(value) {
+        if (typeof value === 'string') {
+            const parts = value.split('-');
+            if (parts.length >= 3) {
+                return `${parts[1]}-${parts[2]}`;
+            }
+        }
+
+        const normalizedTimestamp = Number(value);
+        if (!Number.isFinite(normalizedTimestamp)) return '';
+
+        const date = new Date(normalizedTimestamp);
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${month}-${day}`;
+    }
+
+    function buildChartSeries(data) {
+        return {
+            candleSeriesData: data.map((item, index) => ({
+                x: index,
+                y: [item.open, item.high, item.low, item.close],
+                dateLabel: item.date
+            })),
+            volumeSeriesData: data.map((item, index) => ({
+                x: index,
                 y: item.volume,
-                tradingValue: item.trading_value || 0
-            };
-        });
+                tradingValue: item.trading_value || 0,
+                dateLabel: item.date
+            }))
+        };
+    }
 
-        // 2. 캔들 차트 설정 (상단)
+    function formatDateToIso(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function parseIsoDate(value) {
+        if (typeof value !== 'string') return null;
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(part => !Number.isFinite(part))) return null;
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+
+    function setActivePeriod(days) {
+        periodButtons.forEach(button => {
+            const isActive = Number(button.dataset.period) === days;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    }
+
+    function clearActivePeriod() {
+        periodButtons.forEach(button => {
+            button.classList.remove('is-active');
+            button.setAttribute('aria-pressed', 'false');
+        });
+    }
+
+    if (maxData && maxData.length > 0) {
+        const { candleSeriesData, volumeSeriesData } = buildChartSeries(maxData);
+        const baseMinX = candleSeriesData[0].x;
+        const baseMaxX = candleSeriesData[candleSeriesData.length - 1].x;
+        const minVisibleSpan = 0.5;
+
+        function getDateLabelByX(value) {
+            const numericValue = Number(value);
+            if (!Number.isFinite(numericValue)) return '';
+
+            const clampedIndex = Math.max(0, Math.min(maxData.length - 1, Math.round(numericValue)));
+            const item = maxData[clampedIndex];
+            return item ? formatShortDate(item.date) : '';
+        }
+
+        function shouldForceBrushSync(xaxis, range) {
+            const rawMin = Number(xaxis.min);
+            const rawMax = Number(xaxis.max);
+            if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return true;
+            return Math.abs(rawMin - range.min) > 0.001 || Math.abs(rawMax - range.max) > 0.001;
+        }
+
+        function buildVolumeTooltipHtml(data) {
+            return `<div class="volume-hover-tooltip-card">
+                <div class="volume-hover-tooltip-date">${data.dateLabel}</div>
+                <div class="volume-hover-tooltip-row"><span>거래량</span><b style="color:#000;">${data.y.toLocaleString()}</b></div>
+                <div class="volume-hover-tooltip-row"><span>거래대금</span><b style="color:#000;">${data.tradingValue.toLocaleString()}</b></div>
+            </div>`;
+        }
+
+        function getPeriodRange(days) {
+            const normalizedDays = Math.max(Number(days) || 1, 1);
+            const latestItem = maxData[maxData.length - 1];
+            const latestDate = latestItem ? parseIsoDate(latestItem.date) : null;
+
+            if (!latestDate) {
+                return {
+                    min: candleSeriesData[0].x,
+                    max: candleSeriesData[candleSeriesData.length - 1].x
+                };
+            }
+
+            const cutoffDate = new Date(latestDate);
+            cutoffDate.setDate(cutoffDate.getDate() - normalizedDays + 1);
+            const cutoffIsoDate = formatDateToIso(cutoffDate);
+            let startIndex = maxData.findIndex(item => item.date >= cutoffIsoDate);
+            if (startIndex < 0) {
+                startIndex = 0;
+            }
+
+            return {
+                min: candleSeriesData[startIndex].x,
+                max: candleSeriesData[candleSeriesData.length - 1].x
+            };
+        }
+
+        function clampRange(min, max) {
+            let nextMin = Number.isFinite(min) ? min : baseMinX;
+            let nextMax = Number.isFinite(max) ? max : baseMaxX;
+
+            nextMin = Math.max(baseMinX, nextMin);
+            nextMax = Math.min(baseMaxX, nextMax);
+
+            if (nextMax - nextMin < minVisibleSpan) {
+                if (nextMax >= baseMaxX) {
+                    nextMin = Math.max(baseMinX, baseMaxX - minVisibleSpan);
+                    nextMax = baseMaxX;
+                } else {
+                    nextMax = Math.min(baseMaxX, nextMin + minVisibleSpan);
+                }
+            }
+
+            if (nextMin > nextMax) {
+                nextMin = Math.max(baseMinX, nextMax - minVisibleSpan);
+            }
+
+            return { min: nextMin, max: nextMax };
+        }
+
+        function syncBrushSelection(min, max) {
+            const range = clampRange(min, max);
+            if (!volumeChart) return;
+            currentViewportRange = { min: range.min, max: range.max };
+            isSyncingBrushSelection = true;
+            volumeChart.updateOptions({
+                chart: {
+                    selection: {
+                        enabled: true,
+                        xaxis: {
+                            min: range.min,
+                            max: range.max
+                        }
+                    }
+                }
+            }, false, false, false);
+            setTimeout(() => {
+                isSyncingBrushSelection = false;
+            }, 0);
+        }
+
+        function syncCandleViewport(min, max) {
+            if (!candleChart) return;
+            const range = clampRange(min, max);
+            currentViewportRange = { min: range.min, max: range.max };
+            isSyncingViewport = true;
+            candleChart.updateOptions({
+                xaxis: {
+                    type: 'numeric',
+                    min: range.min,
+                    max: range.max,
+                    labels: { show: false },
+                    axisBorder: { show: false },
+                    tooltip: {
+                        enabled: true,
+                        formatter: function(value) {
+                            return getDateLabelByX(value);
+                        }
+                    }
+                }
+            }, false, false, false);
+            setTimeout(() => {
+                isSyncingViewport = false;
+            }, 0);
+        }
+
+        function applyPeriod(days) {
+            if (!candleChart || !volumeChart) return;
+            const periodRange = getPeriodRange(days);
+            const range = clampRange(periodRange.min, periodRange.max);
+            isApplyingPreset = true;
+            syncCandleViewport(range.min, range.max);
+            syncBrushSelection(range.min, range.max);
+            setActivePeriod(days);
+            setTimeout(() => {
+                isApplyingPreset = false;
+            }, 0);
+        }
+
+        function handleManualViewport(xaxis, source) {
+            if (isApplyingPreset || isSyncingViewport || isSyncingBrushSelection || !xaxis) return;
+            const range = clampRange(xaxis.min, xaxis.max);
+
+            if (source === 'brush') {
+                syncCandleViewport(range.min, range.max);
+                if (shouldForceBrushSync(xaxis, range)) {
+                    syncBrushSelection(range.min, range.max);
+                }
+            } else {
+                syncBrushSelection(range.min, range.max);
+            }
+
+            clearActivePeriod();
+        }
+
         var candleOptions = {
             series: [{ name: '주가', data: candleSeriesData }],
             chart: {
                 type: 'candlestick',
                 height: 290,
                 id: 'candles',
-                toolbar: { show: false }, // 도구 숨김
+                toolbar: { show: false, autoSelected: 'zoom' },
+                zoom: {
+                    enabled: true,
+                    type: 'x',
+                    autoScaleYaxis: true,
+                    allowMouseWheelZoom: true
+                },
+                events: {
+                    beforeZoom: function(ctx, { xaxis }) {
+                        const range = clampRange(xaxis.min, xaxis.max);
+                        return { xaxis: range };
+                    },
+                    zoomed: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    },
+                    scrolled: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    },
+                    selection: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'candle');
+                    }
+                }
             },
             plotOptions: {
                 candlestick: {
-                    colors: { upward: '#ef5350', downward: '#2196f3' } // 상승: 빨강, 하락: 파랑
+                    colors: { upward: '#ef5350', downward: '#2196f3' }
                 }
             },
-            xaxis: { 
-                type: 'category', 
-                labels: { show: false }, 
-                axisBorder: { show: false }
+            xaxis: {
+                type: 'numeric',
+                labels: { show: false },
+                axisBorder: { show: false },
+                tooltip: {
+                    enabled: true,
+                    formatter: function(value) {
+                        return getDateLabelByX(value);
+                    }
+                }
             },
             yaxis: { tooltip: { enabled: false }, labels: { formatter: (val) => Math.round(val).toLocaleString() } },
             tooltip: {
@@ -321,12 +1289,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
                     const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
                     const dataObj = candleSeriesData[dataPointIndex];
-                    if(o === undefined || !dataObj) return '';
-                    
-                    const dateStr = dataObj.x;
-                    
+                    if (o === undefined || !dataObj) return '';
+
                     return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 150px;">
-                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
+                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dataObj.dateLabel}</div>
                         <div style="display:flex; justify-content:space-between;"><span>시가</span> <b style="color: #000;">${o.toLocaleString()}</b></div>
                         <div style="display:flex; justify-content:space-between;"><span>고가</span> <b style="color: #000;">${h.toLocaleString()}</b></div>
                         <div style="display:flex; justify-content:space-between;"><span>저가</span> <b style="color: #000;">${l.toLocaleString()}</b></div>
@@ -336,61 +1302,52 @@ document.addEventListener("DOMContentLoaded", function() {
             },
             grid: { padding: { left: 10, right: 10 } }
         };
-        var candleChart = new ApexCharts(document.querySelector("#candlestick-chart"), candleOptions);
-        candleChart.render();
+        candleChart = new ApexCharts(document.querySelector("#candlestick-chart"), candleOptions);
 
-        const vols = volumeSeriesData.map(d => d.y);
-        const minVol = Math.min(...vols);
-        const yaxisMin = Math.floor(minVol * 0.9);
-
-        // 3. 거래량 바 차트 설정 (하단)
         var volumeOptions = {
             series: [{ name: '거래량', data: volumeSeriesData }],
             chart: {
                 type: 'bar',
-                height: 120,
+                height: 180,
+                id: 'volume-brush',
                 brush: { enabled: true, target: 'candles', autoScaleYaxis: true },
-                selection: { enabled: true },
-                toolbar: { show: false }
+                selection: {
+                    enabled: true,
+                    xaxis: {
+                        min: baseMinX,
+                        max: baseMaxX
+                    }
+                },
+                toolbar: { show: false },
+                events: {
+                    selection: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'brush');
+                    },
+                    brushScrolled: function(ctx, { xaxis }) {
+                        handleManualViewport(xaxis, 'brush');
+                    }
+                }
             },
-            colors: ['#999999'], // 단일 회색
+            colors: ['#999999'],
             dataLabels: { enabled: false },
             plotOptions: { bar: { columnWidth: '80%' } },
-            legend: { show: false }, 
-            xaxis: { 
-                type: 'category', 
-                axisTicks: { show: false },
-                labels: { 
-                    formatter: (val) => {
-                        if (!val) return '';
-                        const index = volumeSeriesData.findIndex(item => item.x === val);
-                        const total = volumeSeriesData.length;
-                        
-                        // 처음, 마지막, 그리고 중간중간
-                        const gap = Math.max(1, Math.floor(total / 4));
-                        
-                        if (index === 0 || index === total - 1) {
-                            const dateParts = val.split('-');
-                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
-                            return val;
-                        } else if (index % gap === 0) {
-                            // 중간 라벨이 끝부분 라벨들과 너무 가까우면 안 그림
-                            if (index < gap / 2 || (total - 1 - index) < gap / 2) return '';
-                            
-                            const dateParts = val.split('-');
-                            if (dateParts.length >= 3) return `${dateParts[1]}-${dateParts[2]}`;
-                            return val;
-                        }
-                        return '';
+            legend: { show: false },
+            xaxis: {
+                type: 'numeric',
+                min: baseMinX,
+                max: baseMaxX,
+                tickAmount: 5,
+                labels: {
+                    formatter: function(value) {
+                        return getDateLabelByX(value);
                     }
                 }
             },
             yaxis: {
-                min: yaxisMin,
+                min: Math.max(0, Math.floor(Math.min(...volumeSeriesData.map(item => Number(item.y) || 0)) * 0.9)),
                 labels: {
                     show: true,
-                    formatter: (val) => {
-                        // 금액 단위 줄이기 K, M 등
+                    formatter: function(val) {
                         if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
                         if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
                         return Math.round(val).toLocaleString();
@@ -399,29 +1356,204 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
             },
             tooltip: {
-                enabled: true,
-                custom: function({seriesIndex, dataPointIndex, w}) {
-                    const data = volumeSeriesData[dataPointIndex];
-                    if(!data) return '';
-                    const dateStr = data.x;
-                    const vol = data.y;
-                    const val = data.tradingValue;
-                    
-                    return `<div style="padding: 10px; border: 1px solid #ddd; background: #fff; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 200px;">
-                        <div style="margin-bottom: 6px; font-weight: bold; color: #111; border-bottom: 1px solid #eee; padding-bottom: 4px; text-align: center;">${dateStr}</div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;"><span>거래량</span> <b style="color: #000;">${vol.toLocaleString()}</b></div>
-                        <div style="display:flex; justify-content:space-between;"><span>거래대금</span> <b style="color: #000;">${val.toLocaleString()}</b></div>
-                    </div>`;
-                }
+                enabled: false
             },
             grid: { padding: { left: 15, right: 15 } }
         };
-        var volumeChart = new ApexCharts(document.querySelector("#volume-chart"), volumeOptions);
-        volumeChart.render();
+        volumeChart = new ApexCharts(document.querySelector("#volume-chart"), volumeOptions);
+
+        const chartContainers = [document.getElementById('candlestick-chart'), document.getElementById('volume-chart')].filter(Boolean);
+        chartContainers.forEach(container => {
+            container.addEventListener('wheel', function() {
+                if (!isApplyingPreset) {
+                    clearActivePeriod();
+                }
+            }, { passive: true });
+        });
+
+        periodButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const days = Number(this.dataset.period);
+                if (!Number.isFinite(days)) return;
+                applyPeriod(days);
+            });
+        });
+
+        Promise.all([candleChart.render(), volumeChart.render()]).then(function() {
+            const volumeChartElement = document.getElementById('volume-chart');
+            if (volumeChartElement) {
+                let volumeTooltip = document.getElementById('volume-hover-tooltip');
+                if (!volumeTooltip) {
+                    volumeTooltip = document.createElement('div');
+                    volumeTooltip.id = 'volume-hover-tooltip';
+                    volumeTooltip.className = 'volume-hover-tooltip';
+                    document.body.appendChild(volumeTooltip);
+                }
+                let isPointerDownOnVolumeChart = false;
+                let brushDragState = null;
+
+                function getBrushPlotRect() {
+                    return (
+                        volumeChartElement.querySelector('.apexcharts-grid')?.getBoundingClientRect()
+                        || volumeChartElement.querySelector('.apexcharts-inner')?.getBoundingClientRect()
+                        || volumeChartElement.getBoundingClientRect()
+                    );
+                }
+
+                function endBrushWindowDrag() {
+                    brushDragState = null;
+                    volumeChartElement.style.cursor = '';
+                    document.removeEventListener('mousemove', handleBrushWindowDragMove);
+                    document.removeEventListener('mouseup', endBrushWindowDrag, true);
+                }
+
+                function handleBrushWindowDragMove(event) {
+                    if (!brushDragState) return;
+
+                    const totalSpan = baseMaxX - baseMinX;
+                    const plotWidth = brushDragState.plotRect.width;
+                    const selectionWidth = brushDragState.initialRange.max - brushDragState.initialRange.min;
+
+                    if (totalSpan <= 0 || plotWidth <= 0 || selectionWidth <= 0) return;
+
+                    const deltaPx = event.clientX - brushDragState.startClientX;
+                    const deltaValue = (deltaPx / plotWidth) * totalSpan;
+                    let nextMin = brushDragState.initialRange.min + deltaValue;
+
+                    nextMin = Math.round(nextMin);
+                    nextMin = Math.max(baseMinX, Math.min(baseMaxX - selectionWidth, nextMin));
+
+                    const nextMax = nextMin + selectionWidth;
+
+                    syncCandleViewport(nextMin, nextMax);
+                    syncBrushSelection(nextMin, nextMax);
+                    clearActivePeriod();
+                }
+
+                function hideVolumeTooltip() {
+                    volumeTooltip.classList.remove('is-visible');
+                    volumeTooltip.innerHTML = '';
+                }
+
+                function showVolumeTooltip(event) {
+                    if (isPointerDownOnVolumeChart || brushDragState) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const gridElement = volumeChartElement.querySelector('.apexcharts-grid');
+                    if (!gridElement) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const gridRect = gridElement.getBoundingClientRect();
+                    if (
+                        event.clientX < gridRect.left
+                        || event.clientX > gridRect.right
+                        || event.clientY < gridRect.top
+                        || event.clientY > gridRect.bottom
+                    ) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const barElements = Array.from(volumeChartElement.querySelectorAll('.apexcharts-bar-series path, .apexcharts-bar-series rect'))
+                        .map((element, index) => {
+                            const rect = element.getBoundingClientRect();
+                            return { element, index, rect };
+                        })
+                        .filter(item => {
+                            return item.rect.width > 0
+                                && item.rect.height > 0
+                                && item.index < volumeSeriesData.length;
+                        });
+
+                    const matchingBar = barElements.find(item => (
+                        event.clientX >= item.rect.left
+                        && event.clientX <= item.rect.right
+                        && event.clientY >= item.rect.top
+                        && event.clientY <= item.rect.bottom
+                    ));
+
+                    if (!matchingBar) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const data = volumeSeriesData[matchingBar.index];
+                    if (!data) {
+                        hideVolumeTooltip();
+                        return;
+                    }
+
+                    const tooltipLeft = matchingBar.rect.left + (matchingBar.rect.width / 2);
+                    const tooltipTop = matchingBar.rect.top;
+
+                    volumeTooltip.innerHTML = buildVolumeTooltipHtml(data);
+                    volumeTooltip.style.left = `${tooltipLeft}px`;
+                    volumeTooltip.style.top = `${tooltipTop}px`;
+                    volumeTooltip.classList.add('is-visible');
+                }
+
+                document.addEventListener('mousemove', showVolumeTooltip, true);
+                document.addEventListener('mouseleave', hideVolumeTooltip, true);
+                volumeChartElement.addEventListener('mousedown', function(event) {
+                    const target = event.target;
+                    const isSelectionRect = Boolean(
+                        target
+                        && target.classList
+                        && target.classList.contains('apexcharts-selection-rect')
+                    );
+
+                    if (isSelectionRect && event.button === 0) {
+                        const activeRange = currentViewportRange
+                            ? { ...currentViewportRange }
+                            : { min: baseMinX, max: baseMaxX };
+                        const selectionWidth = activeRange.max - activeRange.min;
+
+                        if (selectionWidth > minVisibleSpan) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (typeof event.stopImmediatePropagation === 'function') {
+                                event.stopImmediatePropagation();
+                            }
+
+                            brushDragState = {
+                                startClientX: event.clientX,
+                                plotRect: getBrushPlotRect(),
+                                initialRange: activeRange
+                            };
+
+                            volumeChartElement.style.cursor = 'grabbing';
+                            hideVolumeTooltip();
+                            document.addEventListener('mousemove', handleBrushWindowDragMove);
+                            document.addEventListener('mouseup', endBrushWindowDrag, true);
+                            return;
+                        }
+                    }
+
+                    isPointerDownOnVolumeChart = true;
+                    hideVolumeTooltip();
+                }, true);
+                document.addEventListener('mouseup', function() {
+                    isPointerDownOnVolumeChart = false;
+                }, true);
+                document.addEventListener('mousemove', function(event) {
+                    if (isPointerDownOnVolumeChart) {
+                        hideVolumeTooltip();
+                    }
+                }, true);
+            }
+
+            applyPeriod(90);
+        });
+    } else {
+        periodButtons.forEach(button => {
+            button.disabled = true;
+        });
     }
 
-
-    // 4. 우측 주가(기준일) 파란색 마커 위치 계산
     function setMarkerPosition(elementId) {
         const marker = document.getElementById(elementId);
         if (!marker) return;
@@ -435,33 +1567,30 @@ document.addEventListener("DOMContentLoaded", function() {
         const close = parseFloat(closeStr.replace(/,/g, ''));
 
         if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high > low) {
-            // (종가 - 저가) / (고가 - 저가) * 100 으로 퍼센티지 산출
             let percentage = ((close - low) / (high - low)) * 100;
-            // 마커가 바깥으로 안 나가게 0~100 사이 보정
-            percentage = Math.max(0, Math.min(100, percentage)); 
-            
-            // 왼쪽 0%, 오른쪽 100% 위치 지정
+            percentage = Math.max(0, Math.min(100, percentage));
             marker.style.left = percentage + "%";
-            
+
             const label = marker.querySelector('.marker-label');
             if (label) {
                 label.textContent = close.toLocaleString() + '원';
             }
         } else if (!isNaN(low) && !isNaN(high) && !isNaN(close) && high === low) {
-            // 고가와 저가가 같다면 중간에 마커 표시
             marker.style.left = "50%";
-            
+
             const label = marker.querySelector('.marker-label');
             if (label) {
                 label.textContent = close.toLocaleString() + '원';
             }
         } else {
-            marker.style.display = "none"; // 데이터가 이상하면 마커 숨김
+            marker.style.display = "none";
         }
     }
 
     setMarkerPosition('marker-1day');
     setMarkerPosition('marker-1year');
+    updateMetricBars();
+    renderCompetitivenessRadar();
 });
 </script>
 </body>
