@@ -523,7 +523,7 @@
             <img src="{% static 'main/home_icon_final.png' %}" alt="홈으로 이동" class="home-icon">
         </a>
         <nav class="tabs">
-            <a href="#" class="tab-item">요약</a>
+            <a href="{% url 'overview' company.stock_code %}" class="tab-item">요약</a>
             <a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
             <a href="#" class="tab-item active">재무 정보</a>
             <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
