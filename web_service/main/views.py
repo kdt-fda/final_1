@@ -1,5 +1,4 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.views.decorators.cache import cache_page
 from datetime import date, timedelta
 import math
 import threading
@@ -48,14 +47,11 @@ _COMPETITIVENESS_FINANCE_DF = None
 _COMPETITIVENESS_FINANCE_LOCK = threading.Lock()
 _COMPETITIVENESS_CONFIRMED_YEARS = []
 _COMPETITIVENESS_ACTIVE_COMPANY_COUNT = 0
-PAGE_CACHE_SECONDS = 60 * 15
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='home_page')
 def home(request):
     count = Report.objects.count()
     return render(request, 'home.html', {'count': count})
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='search_page')
 def search(request):
     query = request.GET.get('q', '')
     
@@ -73,7 +69,6 @@ def search(request):
     # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줌
     return render(request, 'search.html', {'results': results, 'query': query})
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='ai_page')
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic, stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
     report = Report.objects.filter(stock_code=stock_code).first() # 해당 종목의 report 테이블을 가져옴
@@ -103,11 +98,9 @@ def ai_page(request, stock_code):
     }
     return render(request, 'ai_page.html', context)
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='overview_page')
 def overview(request):
     return render(request, 'overview.html')
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='finance_page')
 def finance(request, stock_code=None):
     def empty_competitiveness_radar_context(target_stock_code=None):
         metric_payload = []
@@ -622,7 +615,6 @@ def finance(request, stock_code=None):
     }
     return render(request, 'finance.html', context)
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='industry_page')
 def industry(request, stock_code=None):
     def to_float(value):
         if value is None:
@@ -1019,16 +1011,13 @@ def industry(request, stock_code=None):
 
 
 # 여기서 함수 이름이랑 .html 이름 나중에 수정할 것, urls.py에서 연결할 주소 명칭도 적절하게 바꿔야됨
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='a_page')
 def a(request):
     return render(request, 'a.html')
 
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='about_page')
 def about(request):
     return render(request, 'about.html')
 
 
-@cache_page(PAGE_CACHE_SECONDS, key_prefix='stats_page')
 def stats(request):
     return render(request, 'stats.html')
