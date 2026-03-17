@@ -1053,16 +1053,3 @@ def industry(request, stock_code=None):
         **growth_context,
     }
     return render(request, 'industry.html', context)
-
-
-# 여기서 함수 이름이랑 .html 이름 나중에 수정할 것, urls.py에서 연결할 주소 명칭도 적절하게 바꿔야됨
-def a(request):
-    return render(request, 'a.html')
-
-
-def about(request):
-    return render(request, 'about.html')
-
-
-def stats(request):
-    return render(request, 'stats.html')
