@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import requests
 import datetime
+import time
 
 # 루트 경로를 추가하여 common 패키지를 인식하게 함
 temp_base = Path(__file__).resolve().parents[1] # parents[0]은 data_pipeline 폴더를 의미함
@@ -389,14 +390,33 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
         if not missing_dates:
             continue # 모두 DB에 존재할 경우 깔끔히 건너뛰기
         
-        try:
-            df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt, finance_map)
-            if df_multi is not None and not df_multi.empty:
-                rows.append(df_multi)
-            else:
-                fail_list.append((stock_code, "empty result"))
-        except Exception as e:
-            fail_list.append((stock_code, str(e)))
+        max_retries = 3 # 최대 재시도 횟수
+        df_multi = None
+        
+        for attempt in range(max_retries):
+            try:
+                # 기본 0.5초 대기 (재시도할 때는 1초, 1.5초로 늘어남)
+                time.sleep(0.5 * (attempt + 1))
+                df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt, finance_map)
+                
+                if df_multi is not None and not df_multi.empty: # 빈프레임 아니면 for문 끝내기
+                    break 
+                else:
+                    if attempt < max_retries - 1:
+                        print(f"[{stock_code}] 데이터 누락 감지. 재시도 중... ({attempt+1}/{max_retries})")
+                        
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"[{stock_code}] 통신 에러({e}). 재시도 중... ({attempt+1}/{max_retries})")
+                else:
+                    fail_list.append((stock_code, str(e))) # 최종 실패하면 실패 리스트에 추가
+        
+        if df_multi is not None and not df_multi.empty: # 빈프레임이 아니면 추가
+            rows.append(df_multi)
+        else:
+            # 3번 다 실패했거나 빈 데이터만 받았다면 최종 실패 처리
+            if not any(f[0] == stock_code for f in fail_list): # 중복 추가 방지
+                fail_list.append((stock_code, "empty result after retries"))
 
     print(f"성공 건수: {sum(len(r) for r in rows if r is not None)}")
     print(f"실패/누락 종목 수: {len(fail_list)}")
