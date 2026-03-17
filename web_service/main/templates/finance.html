@@ -485,6 +485,220 @@
         .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
         .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
         #volume-chart .apexcharts-selection-rect { cursor: grab; }
+        .financial-percentile-card {
+            padding: 34px 38px;
+        }
+        .financial-section-note {
+            margin: 10px 0 0;
+            color: #777;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        .financial-metric-grid {
+            display: grid;
+            gap: 0;
+        }
+        .financial-metric-grid.is-three {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .financial-metric-grid.is-two {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            row-gap: 28px;
+        }
+        .financial-metric-card {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 0 24px;
+        }
+        .financial-metric-card:not(:first-child) {
+            border-left: 1px solid #e5e7eb;
+        }
+        .financial-metric-grid.is-two .financial-metric-card:nth-child(odd) {
+            border-left: 0;
+            padding-left: 0;
+        }
+        .financial-metric-grid.is-two .financial-metric-card:nth-child(even) {
+            padding-right: 0;
+        }
+        .financial-metric-grid.is-two .financial-metric-card:nth-child(n+3) {
+            border-top: 1px solid #e5e7eb;
+            padding-top: 28px;
+        }
+        .financial-metric-grid.is-two .financial-metric-card:last-child:nth-child(odd) {
+            grid-column: 1 / -1;
+            padding-right: 0;
+        }
+        .financial-metric-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            align-self: flex-start;
+            min-height: 0;
+            padding: 5px 20px;
+            border: none;
+            border-radius: 20px;
+            background: #fff;
+            color: #111827;
+            font-size: 1.1rem;
+            font-weight: 700;
+            box-shadow: 0 0 24px rgba(17, 24, 39, 0.10);
+        }
+        .financial-metric-chip.is-warning {
+            background: #fff2bf;
+            color: #7d5d12;
+            box-shadow: 0 0 24px rgba(157, 125, 30, 0.14);
+        }
+        .financial-metric-intro {
+            margin: 12px 0 18px;
+            color: #555;
+            font-size: 1.02rem;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+        .financial-track-shell {
+            position: relative;
+            margin-top: 0;
+            padding-top: 64px;
+            padding-bottom: 64px;
+            overflow: visible;
+        }
+        .financial-track {
+            position: relative;
+            height: 10px;
+            border-radius: 999px;
+            background: #e0e0e0;
+            z-index: 1;
+        }
+        .financial-track-dot {
+            position: absolute;
+            top: 50%;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18);
+            z-index: 2;
+        }
+        .financial-track-dot.is-company {
+            background: #1677ff;
+        }
+        .financial-track-dot.is-average {
+            background: #6b7280;
+        }
+        .financial-track-bubble {
+            position: absolute;
+            min-width: 128px;
+            width: max-content;
+            max-width: none;
+            padding: 4px 8px;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: 0 0 18px rgba(17, 24, 39, 0.14);
+            color: #111;
+            text-align: center;
+            line-height: 1.15;
+            transform: translateX(-50%);
+            z-index: 3;
+            --pointer-left: 50%;
+        }
+        .financial-track-bubble::after {
+            content: '';
+            position: absolute;
+            left: var(--pointer-left);
+            transform: translateX(-50%);
+            border-width: 6px;
+            border-style: solid;
+            filter: drop-shadow(0 0 6px rgba(17, 24, 39, 0.10));
+        }
+        .financial-track-bubble strong {
+            display: block;
+            color: #555;
+            font-size: 1.04rem;
+            font-weight: 500;
+            white-space: nowrap;
+            word-break: keep-all;
+        }
+        .financial-track-bubble span {
+            display: block;
+            margin-top: 1px;
+            color: #555;
+            font-size: 1.04rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .financial-track-bubble.is-company {
+            top: 0;
+        }
+        .financial-track-bubble.is-company::after {
+            bottom: -12px;
+            border-color: #fff transparent transparent transparent;
+        }
+        .financial-track-bubble.is-average {
+            top: 86px;
+        }
+        .financial-track-bubble.is-average::after {
+            top: -12px;
+            border-color: transparent transparent #fff transparent;
+        }
+        .financial-scale {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            color: #555;
+            font-size: 0.98rem;
+            font-weight: 600;
+        }
+        .financial-scale span:first-child {
+            color: #d93025;
+        }
+        .financial-scale span:last-child {
+            color: #188038;
+        }
+        .financial-metric-description {
+            margin: 0;
+            color: #555;
+            font-size: 1.04rem;
+            font-weight: 500;
+            line-height: 1.5;
+            word-break: keep-all;
+        }
+        .financial-metric-card.is-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+            min-height: 230px;
+            justify-content: flex-start;
+        }
+        .financial-metric-empty-body {
+            display: flex;
+            flex: 1;
+            width: 100%;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        .financial-metric-empty-body .financial-metric-intro,
+        .financial-metric-empty-body .financial-metric-description {
+            width: 100%;
+            text-align: center;
+        }
+        .financial-metric-description.is-empty {
+            color: #7d5d12;
+            font-weight: 600;
+        }
+        .financial-metric-footnote {
+            width: 100%;
+            margin: auto 0 0;
+            padding-top: 16px;
+            color: #777;
+            font-size: 0.92rem;
+            line-height: 1.5;
+            text-align: left;
+            word-break: keep-all;
+        }
 
         @media (max-width: 960px) {
             .container { padding: 32px 24px 48px; }
@@ -499,6 +713,29 @@
                 overflow-x: auto;
             }
             .chart-period-button { flex: 0 0 auto; }
+            .financial-percentile-card {
+                padding: 30px 24px;
+            }
+            .financial-metric-grid.is-three,
+            .financial-metric-grid.is-two {
+                grid-template-columns: 1fr;
+                row-gap: 0;
+            }
+            .financial-metric-card {
+                padding: 22px 0 0;
+            }
+            .financial-metric-card:not(:first-child) {
+                border-left: 0;
+                border-top: 1px solid #e5e7eb;
+            }
+            .financial-metric-grid.is-two .financial-metric-card:nth-child(odd),
+            .financial-metric-grid.is-two .financial-metric-card:nth-child(even),
+            .financial-metric-grid.is-two .financial-metric-card:last-child:nth-child(odd) {
+                grid-column: auto;
+                padding-left: 0;
+                padding-right: 0;
+                padding-top: 22px;
+            }
         }
         @media (max-width: 640px) {
             .competitiveness-card {
@@ -511,6 +748,22 @@
             }
             .competitiveness-analysis-head {
                 min-width: 110px;
+            }
+            .financial-track-bubble {
+                min-width: 112px;
+                padding: 4px 7px;
+            }
+            .financial-scale {
+                font-size: 0.92rem;
+            }
+            .financial-metric-description {
+                font-size: 0.96rem;
+            }
+            .financial-track-bubble strong {
+                font-size: 0.96rem;
+            }
+            .financial-track-bubble span {
+                font-size: 0.96rem;
             }
         }
 </style>
@@ -776,6 +1029,53 @@
             </div>
         </div>
     </section>
+
+    {% for section in financial_percentile_sections %}
+    <section class="section-block">
+        <h2 class="card-title">{{ section.title }}</h2>
+        {% if section.note %}
+        <p class="financial-section-note">{{ section.note }}</p>
+        {% endif %}
+        <div class="card financial-percentile-card">
+                <div class="financial-metric-grid {% if section.column_count == 2 %}is-two{% else %}is-three{% endif %}">
+                    {% for metric in section.metrics %}
+                    <article class="financial-metric-card{% if not metric.available %} is-empty{% endif %}">
+                        <div class="financial-metric-chip{% if not metric.available %} is-warning{% endif %}">{{ metric.label }}</div>
+                        {% if metric.available %}
+                        <p class="financial-metric-intro">{{ metric.guide }}</p>
+                        <div class="financial-track-shell">
+                            <div class="financial-track-bubble is-company" style="left: clamp(64px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 64px));">
+                                <strong>{{ company.corp_name }}({{ metric.company_value_display }})</strong>
+                                <span>상위 {{ metric.company_top_percent }}%</span>
+                            </div>
+                            <div class="financial-track">
+                                <span class="financial-track-dot is-average" style="left: clamp(10px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                                <span class="financial-track-dot is-company" style="left: clamp(10px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                            </div>
+                            <div class="financial-track-bubble is-average" style="left: clamp(64px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 64px));">
+                                <strong>{{ metric.benchmark_label }}({{ metric.benchmark_value_display }})</strong>
+                                <span>상위 {{ metric.benchmark_top_percent }}%</span>
+                            </div>
+                            <div class="financial-scale">
+                                <span>100%</span>
+                                <span>0%</span>
+                            </div>
+                        </div>
+                        <p class="financial-metric-description">{{ metric.description }}</p>
+                        {% else %}
+                        <div class="financial-metric-empty-body">
+                            <p class="financial-metric-description is-empty">{{ metric.message }}</p>
+                        </div>
+                        {% endif %}
+                        {% if metric.footnote %}
+                        <p class="financial-metric-footnote">{{ metric.footnote }}</p>
+                        {% endif %}
+                    </article>
+                    {% endfor %}
+                </div>
+        </div>
+    </section>
+    {% endfor %}
 </div>
 
 {{ chart_data_json|json_script:"chart-data" }}
@@ -1601,10 +1901,34 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
+    function alignFinancialBubblePointers() {
+        document.querySelectorAll('.financial-track-shell').forEach(shell => {
+            [
+                { bubbleSelector: '.financial-track-bubble.is-company', dotSelector: '.financial-track-dot.is-company' },
+                { bubbleSelector: '.financial-track-bubble.is-average', dotSelector: '.financial-track-dot.is-average' }
+            ].forEach(pair => {
+                const bubble = shell.querySelector(pair.bubbleSelector);
+                const dot = shell.querySelector(pair.dotSelector);
+
+                if (!bubble || !dot) return;
+
+                const bubbleRect = bubble.getBoundingClientRect();
+                const dotRect = dot.getBoundingClientRect();
+                const dotCenterX = dotRect.left + (dotRect.width / 2);
+                const pointerLeft = dotCenterX - bubbleRect.left;
+                const clampedPointerLeft = Math.max(12, Math.min(bubbleRect.width - 12, pointerLeft));
+
+                bubble.style.setProperty('--pointer-left', `${clampedPointerLeft}px`);
+            });
+        });
+    }
+
     setMarkerPosition('marker-1day');
     setMarkerPosition('marker-1year');
     updateMetricBars();
     renderCompetitivenessRadar();
+    alignFinancialBubblePointers();
+    window.addEventListener('resize', alignFinancialBubblePointers);
 });
 </script>
 </body>
