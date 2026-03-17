@@ -1,4 +1,4 @@
-from django.shortcuts import render, get_object_or_404, redirect
+﻿from django.shortcuts import render, get_object_or_404, redirect
 from datetime import date, timedelta
 import math
 import threading
@@ -47,6 +47,17 @@ _COMPETITIVENESS_FINANCE_DF = None
 _COMPETITIVENESS_FINANCE_LOCK = threading.Lock()
 _COMPETITIVENESS_CONFIRMED_YEARS = []
 _COMPETITIVENESS_ACTIVE_COMPANY_COUNT = 0
+FINANCIAL_METRIC_DESCRIPTIONS = {
+    '매출성장률': '기업의 매출이 얼마나 빠르게 증가하고 있는지를 보여주는 지표',
+    'ROE': '기업이 자기자본을 활용해 얼마나 효율적으로 이익을 내는지를 보여주는 지표',
+    '순이익률': '매출 대비 실제로 얼마나 이익을 남기는지를 보여주는 지표',
+    '부채비율': '기업이 얼마나 많은 부채를 활용하고 있는지를 보여주는 지표',
+    '유동비율': '기업이 단기 부채를 상환할 수 있는 능력을 보여주는 지표',
+    '자기자본비율': '기업의 자산 중 자기자본이 차지하는 비중을 보여주는 지표',
+    '매출액 증가율': '기업의 매출 규모가 얼마나 성장했는지를 보여주는 지표',
+    'EPS 성장률': '주당 이익이 얼마나 증가했는지를 보여주는 지표',
+}
+DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 우수한 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
 
 def home(request):
     count = Report.objects.count()
@@ -91,7 +102,7 @@ def home(request):
                     'code': stock_code_str,
                     'name': company_name,
                     'price': f"{close_price:,}",
-                    'change_text': f"{sign}{price_change:,} ({change_rate:.2f}%)",
+                    'change_text': f"{sign}{price_change:,}원 ({change_rate:.2f}%)",
                     'css_class': css_class
                 })
 
@@ -616,6 +627,366 @@ def finance(request, stock_code=None):
             'count': peer_count,
         }
 
+    def calculate_position_percentile(series, value):
+        if value is None or pd.isna(value):
+            return None
+
+        valid_series = pd.Series(series).dropna()
+        if valid_series.empty:
+            return None
+
+        percentile = float((valid_series <= float(value)).mean() * 100)
+        percentile = max(0.0, min(100.0, percentile))
+        return round_score(percentile)
+
+    def score_to_top_percent(score):
+        if score is None or pd.isna(score):
+            return None
+
+        top_percent = int(round(100 - float(score)))
+        return min(100, max(1, top_percent if top_percent > 0 else 1))
+
+    def build_unavailable_metric(label, message):
+        return {
+            'label': label,
+            'available': False,
+            'guide': FINANCIAL_METRIC_DESCRIPTIONS.get(label, ''),
+            'footnote': DEBT_RATIO_FOOTNOTE if label == '부채비율' else None,
+            'message': message,
+        }
+
+    def get_median_numeric_value(series):
+        valid_series = pd.Series(series).dropna()
+        if valid_series.empty:
+            return None
+        return float(valid_series.median())
+
+    def build_percentile_metric(
+        label,
+        series,
+        company_value,
+        higher_is_better=True,
+        benchmark_value=None,
+        benchmark_label='피어그룹 중앙값',
+    ):
+        valid_series = pd.Series(series).dropna()
+        if company_value is None or pd.isna(company_value) or valid_series.empty:
+            return None
+
+        company_score = calculate_percentile_score(valid_series, company_value, higher_is_better=higher_is_better)
+        benchmark_score = calculate_percentile_score(valid_series, benchmark_value, higher_is_better=higher_is_better)
+        company_position = company_score
+        benchmark_position = benchmark_score
+
+        if company_position is None or benchmark_position is None or company_score is None or benchmark_score is None:
+            return None
+
+        company_value_display = format_percent_metric(company_value)
+        company_top_percent = score_to_top_percent(company_score)
+        benchmark_top_percent = score_to_top_percent(benchmark_score)
+
+        return {
+            'label': label,
+            'available': True,
+            'guide': FINANCIAL_METRIC_DESCRIPTIONS.get(label, ''),
+            'footnote': DEBT_RATIO_FOOTNOTE if label == '부채비율' else None,
+            'benchmark_label': benchmark_label,
+            'company_value_display': company_value_display,
+            'benchmark_value_display': format_percent_metric(benchmark_value),
+            'company_position': company_position,
+            'benchmark_position': benchmark_position,
+            'company_top_percent': company_top_percent,
+            'benchmark_top_percent': benchmark_top_percent,
+            'description': f"{company.corp_name}의 {label}은 {company_value_display}로, 코스닥 내 상위 {company_top_percent}%입니다.",
+        }
+
+    def resolve_latest_finance_year(finance_df, target_stock_code, required_fields):
+        if finance_df.empty or active_company_count <= 0:
+            return None
+
+        valid_df = finance_df.dropna(subset=required_fields).copy()
+        if valid_df.empty:
+            return None
+
+        required_count = max(1, math.ceil(active_company_count * COMPETITIVENESS_YEAR_CONFIRM_RATIO))
+        year_counts = valid_df.groupby('biz_year')['stock_code'].nunique()
+        target_years = (
+            valid_df.loc[valid_df['stock_code'] == target_stock_code, 'biz_year']
+            .dropna()
+            .astype(int)
+            .unique()
+            .tolist()
+        )
+
+        candidate_years = [year for year in target_years if int(year_counts.get(year, 0)) >= required_count]
+        return max(candidate_years) if candidate_years else None
+
+    def build_eps_growth_dataframe(stock_codes):
+        stock_records = list(
+            CompanyStock.objects.filter(stock_code__in=stock_codes)
+            .values('stock_code', 'reference_date', 'eps')
+            .order_by('stock_code', 'reference_date')
+        )
+        if not stock_records:
+            return pd.DataFrame(columns=['stock_code', 'reference_date', 'eps', 'prev_eps', 'eps_growth_rate_pct'])
+
+        stock_df = pd.DataFrame.from_records(stock_records)
+        stock_df['stock_code'] = stock_df['stock_code'].astype(str)
+        stock_df['reference_date'] = pd.to_datetime(stock_df['reference_date'], errors='coerce')
+        stock_df['eps'] = pd.to_numeric(stock_df['eps'], errors='coerce')
+        stock_df = stock_df.dropna(subset=['stock_code', 'reference_date']).copy()
+        stock_df = stock_df.sort_values(['stock_code', 'reference_date']).reset_index(drop=True)
+        stock_df['prev_eps'] = stock_df.groupby('stock_code')['eps'].shift(1)
+        stock_df['eps_growth_rate_pct'] = ((stock_df['eps'] - stock_df['prev_eps']) / stock_df['prev_eps']) * 100
+        stock_df.loc[
+            stock_df['eps'].isna() | stock_df['prev_eps'].isna() | (stock_df['prev_eps'] == 0),
+            'eps_growth_rate_pct'
+        ] = pd.NA
+        return stock_df
+
+    def resolve_latest_reference_date(metric_df, target_stock_code, metric_column):
+        if metric_df.empty or active_company_count <= 0:
+            return None
+
+        valid_df = metric_df.dropna(subset=[metric_column]).copy()
+        if valid_df.empty:
+            return None
+
+        required_count = max(1, math.ceil(active_company_count * COMPETITIVENESS_YEAR_CONFIRM_RATIO))
+        date_counts = valid_df.groupby('reference_date')['stock_code'].nunique()
+        target_dates = (
+            valid_df.loc[valid_df['stock_code'] == target_stock_code, 'reference_date']
+            .dropna()
+            .tolist()
+        )
+
+        candidate_dates = [dt for dt in target_dates if int(date_counts.get(dt, 0)) >= required_count]
+        return max(candidate_dates) if candidate_dates else None
+
+    def build_financial_percentile_sections(target_stock_code):
+        target_stock_code = str(target_stock_code)
+        comparison_stock_codes = sorted(set(active_codes) | {target_stock_code})
+        peer_stock_codes = set(
+            Basic.objects.filter(is_active=True, ind_code=company.ind_code)
+            .values_list('stock_code', flat=True)
+        )
+        peer_stock_codes.add(target_stock_code)
+        finance_records = list(
+            CompanyFinance.objects.filter(stock_code__in=comparison_stock_codes)
+            .values(
+                'stock_code',
+                'biz_year',
+                'sales_growth_rate_pct',
+                'roe',
+                'net_margin_pct',
+                'debt_ratio_pct',
+                'current_ratio_pct',
+                'equity',
+                'total_assets',
+                'revenue_latest',
+                'revenue_1y_ago',
+            )
+        )
+
+        finance_columns = [
+            'sales_growth_rate_pct',
+            'roe',
+            'net_margin_pct',
+            'debt_ratio_pct',
+            'current_ratio_pct',
+            'equity',
+            'total_assets',
+            'revenue_latest',
+            'revenue_1y_ago',
+        ]
+
+        if finance_records:
+            finance_df = pd.DataFrame.from_records(finance_records)
+            finance_df['stock_code'] = finance_df['stock_code'].astype(str)
+            finance_df['biz_year'] = pd.to_numeric(finance_df['biz_year'], errors='coerce')
+            for column in finance_columns:
+                finance_df[column] = pd.to_numeric(finance_df[column], errors='coerce')
+            finance_df = finance_df.dropna(subset=['stock_code', 'biz_year']).copy()
+            finance_df['biz_year'] = finance_df['biz_year'].astype(int)
+            finance_df['equity_ratio_pct'] = (finance_df['equity'] / finance_df['total_assets']) * 100
+            finance_df.loc[
+                finance_df['equity'].isna() | finance_df['total_assets'].isna() | (finance_df['total_assets'] == 0),
+                'equity_ratio_pct'
+            ] = pd.NA
+            finance_df['revenue_growth_custom_pct'] = ((finance_df['revenue_latest'] - finance_df['revenue_1y_ago']) / finance_df['revenue_1y_ago']) * 100
+            finance_df.loc[
+                finance_df['revenue_latest'].isna() | finance_df['revenue_1y_ago'].isna() | (finance_df['revenue_1y_ago'] == 0),
+                'revenue_growth_custom_pct'
+            ] = pd.NA
+        else:
+            finance_df = pd.DataFrame(columns=['stock_code', 'biz_year', *finance_columns, 'equity_ratio_pct', 'revenue_growth_custom_pct'])
+
+        finance_required_fields = [
+            'sales_growth_rate_pct',
+            'roe',
+            'net_margin_pct',
+            'debt_ratio_pct',
+            'current_ratio_pct',
+            'equity_ratio_pct',
+            'revenue_growth_custom_pct',
+        ]
+        resolved_finance_year = resolve_latest_finance_year(finance_df, target_stock_code, finance_required_fields)
+
+        if resolved_finance_year is not None:
+            finance_year_df = (
+                finance_df[finance_df['biz_year'] == int(resolved_finance_year)]
+                .sort_values(['stock_code', 'biz_year'], ascending=[True, False])
+                .drop_duplicates(subset=['stock_code'], keep='first')
+                .reset_index(drop=True)
+            )
+            peer_finance_year_df = finance_year_df[finance_year_df['stock_code'].isin(peer_stock_codes)].copy()
+            company_finance_row = finance_year_df[finance_year_df['stock_code'] == target_stock_code]
+            company_finance_row = company_finance_row.iloc[0] if not company_finance_row.empty else None
+        else:
+            finance_year_df = finance_df.iloc[0:0].copy()
+            peer_finance_year_df = finance_df.iloc[0:0].copy()
+            company_finance_row = None
+
+        eps_growth_df = build_eps_growth_dataframe(comparison_stock_codes)
+        resolved_eps_date = resolve_latest_reference_date(eps_growth_df, target_stock_code, 'eps_growth_rate_pct')
+        if resolved_eps_date is not None:
+            eps_date_df = (
+                eps_growth_df[eps_growth_df['reference_date'] == resolved_eps_date]
+                .sort_values(['stock_code', 'reference_date'], ascending=[True, False])
+                .drop_duplicates(subset=['stock_code'], keep='first')
+                .reset_index(drop=True)
+            )
+            peer_eps_date_df = eps_date_df[eps_date_df['stock_code'].isin(peer_stock_codes)].copy()
+            company_eps_row = eps_date_df[eps_date_df['stock_code'] == target_stock_code]
+            company_eps_row = company_eps_row.iloc[0] if not company_eps_row.empty else None
+        else:
+            eps_date_df = eps_growth_df.iloc[0:0].copy()
+            peer_eps_date_df = eps_growth_df.iloc[0:0].copy()
+            company_eps_row = None
+
+        profitability_metrics = []
+        stability_metrics = []
+        growth_metrics = []
+
+        if company_finance_row is not None:
+            profitability_metrics.extend([
+                build_percentile_metric(
+                    '매출성장률',
+                    finance_year_df['sales_growth_rate_pct'],
+                    company_finance_row.get('sales_growth_rate_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['sales_growth_rate_pct']),
+                ),
+                build_percentile_metric(
+                    'ROE',
+                    finance_year_df['roe'],
+                    company_finance_row.get('roe'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['roe']),
+                ),
+                build_percentile_metric(
+                    '순이익률',
+                    finance_year_df['net_margin_pct'],
+                    company_finance_row.get('net_margin_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['net_margin_pct']),
+                ),
+            ])
+            stability_metrics.extend([
+                build_percentile_metric(
+                    '부채비율',
+                    finance_year_df['debt_ratio_pct'],
+                    company_finance_row.get('debt_ratio_pct'),
+                    higher_is_better=False,
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['debt_ratio_pct']),
+                ),
+                build_percentile_metric(
+                    '유동비율',
+                    finance_year_df['current_ratio_pct'],
+                    company_finance_row.get('current_ratio_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['current_ratio_pct']),
+                ),
+                build_percentile_metric(
+                    '자기자본비율',
+                    finance_year_df['equity_ratio_pct'],
+                    company_finance_row.get('equity_ratio_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['equity_ratio_pct']),
+                ),
+            ])
+            growth_metrics.append(
+                build_percentile_metric(
+                    '매출액 증가율',
+                    finance_year_df['revenue_growth_custom_pct'],
+                    company_finance_row.get('revenue_growth_custom_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['revenue_growth_custom_pct']),
+                )
+            )
+
+        if not profitability_metrics:
+            profitability_metrics = [
+                build_unavailable_metric('매출성장률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('ROE', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('순이익률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+            ]
+        else:
+            profitability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
+                profitability_metrics,
+                ['매출성장률', 'ROE', '순이익률']
+            )]
+
+        if not stability_metrics:
+            stability_metrics = [
+                build_unavailable_metric('부채비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('유동비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('자기자본비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+            ]
+        else:
+            stability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
+                stability_metrics,
+                ['부채비율', '유동비율', '자기자본비율']
+            )]
+
+        eps_metric = None
+        if company_eps_row is not None:
+            eps_metric = build_percentile_metric(
+                'EPS 성장률',
+                eps_date_df['eps_growth_rate_pct'],
+                company_eps_row.get('eps_growth_rate_pct'),
+                benchmark_value=get_median_numeric_value(peer_eps_date_df['eps_growth_rate_pct']),
+            )
+        growth_metrics.append(eps_metric or build_unavailable_metric('EPS 성장률', '조건을 만족하는 기준일 데이터를 찾지 못했습니다.'))
+        growth_metrics = [
+            growth_metrics[0] if growth_metrics and growth_metrics[0] is not None else build_unavailable_metric('매출액 증가율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+            growth_metrics[1],
+        ]
+
+        growth_note_parts = []
+        if resolved_finance_year is not None:
+            growth_note_parts.append(f"재무 기준 {resolved_finance_year}년")
+        if resolved_eps_date is not None:
+            growth_note_parts.append(f"EPS 기준 {resolved_eps_date.strftime('%Y-%m-%d')}")
+
+        return [
+            {
+                'title': '수익성 지표',
+                'note': f"기준 사업연도 {resolved_finance_year}년" if resolved_finance_year is not None else None,
+                'metrics': profitability_metrics,
+                'column_count': 2,
+                'footnote': None,
+            },
+            {
+                'title': '안정성 지표',
+                'note': f"기준 사업연도 {resolved_finance_year}년" if resolved_finance_year is not None else None,
+                'metrics': stability_metrics,
+                'column_count': 2,
+                'footnote': None,
+            },
+            {
+                'title': '성장성 지표',
+                'note': ' / '.join(growth_note_parts) if growth_note_parts else None,
+                'metrics': growth_metrics,
+                'column_count': 2,
+                'footnote': None,
+            },
+        ]
+
     if not stock_code:
         # URL에 stock_code가 없을 경우 안전장치
         company = Basic.objects.filter(is_active=True).first()
@@ -625,6 +996,8 @@ def finance(request, stock_code=None):
             return render(request, 'finance.html')
 
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
+    active_codes = list(Basic.objects.filter(is_active=True).values_list('stock_code', flat=True))
+    active_company_count = len(active_codes)
 
     # 날짜 계산: 어제 날짜 기준으로 가장 최근 개장일 찾기
     today = date.today() 
@@ -692,6 +1065,7 @@ def finance(request, stock_code=None):
         'pbr_is_complete_capital_impairment': latest_finance_equity is not None and latest_finance_equity < 0,
         'biz_year': latest_company_finance.get('biz_year') if latest_company_finance else None,
     }
+    financial_percentile_sections = build_financial_percentile_sections(stock_code)
 
     context = {
         'company': company,
@@ -705,6 +1079,7 @@ def finance(request, stock_code=None):
         'payout_info_missing': payout_info_missing,
         'valuation_alerts': valuation_alerts,
         'competitiveness_radar': get_competitiveness_radar_context(stock_code),
+        'financial_percentile_sections': financial_percentile_sections,
     }
     return render(request, 'finance.html', context)
 
@@ -721,7 +1096,7 @@ def industry(request, stock_code=None):
         if value is None:
             return '-'
         try:
-            return f"{int(value):,}"
+            return f"{int(value):,}원"
         except (TypeError, ValueError):
             return '-'
 
@@ -745,7 +1120,7 @@ def industry(request, stock_code=None):
             sign = ''
             css_class = 'flat'
 
-        return f"{sign}{abs(change_value):,}({abs(rate_value):.2f}%)", css_class
+        return f"{sign}{abs(change_value):,}원 ({abs(rate_value):.2f}%)", css_class
 
     def company_topic_particle(name):
         text = str(name).strip() if name is not None else ''
