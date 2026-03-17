@@ -8,7 +8,7 @@ import pandas as pd
 from django.db.models import OuterRef, Subquery
 from django.db.utils import OperationalError, ProgrammingError
 
-from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report
+from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex
 
 
 COMPETITIVENESS_METRICS = [
@@ -143,8 +143,56 @@ def ai_page(request, stock_code):
     }
     return render(request, 'ai_page.html', context)
 
-def overview(request):
-    return render(request, 'overview.html')
+def overview(request, stock_code=None):
+    if not stock_code:
+        # URL에 stock_code가 없을 경우 첫 번째 활성화된 기업으로 리다이렉트
+        company = Basic.objects.filter(is_active=True).first()
+        if company:
+            return redirect('overview', stock_code=company.stock_code)
+        return render(request, 'overview.html')
+
+    company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
+
+    # 1. COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
+    latest_overlap = CompanyStock.objects.filter(
+        stock_code=stock_code,
+        reference_date__in=MarketIndex.objects.values('date')
+    ).order_by('-reference_date').first()
+
+    latest_date = latest_overlap.reference_date if latest_overlap else date.today()
+
+    # 2. 기본 정보 데이터 페치
+    stock_data = CompanyStock.objects.filter(stock_code=stock_code, reference_date=latest_date).first()
+    index_data = MarketIndex.objects.filter(date=latest_date).first()
+    finance_data = CompanyFinance.objects.filter(stock_code=stock_code).order_by('-biz_year').first()
+
+    # 3. 차트용 데이터 (최신 교집합 날짜 기준 역순 60일치 가져와서 정방향 정렬)
+    past_60_stocks = list(CompanyStock.objects.filter(
+        stock_code=stock_code,
+        reference_date__lte=latest_date
+    ).order_by('-reference_date')[:60])
+    past_60_stocks.reverse() # 과거 -> 최신 순으로 정렬
+
+    chart_dates = [s.reference_date for s in past_60_stocks]
+    market_indices = MarketIndex.objects.filter(date__in=chart_dates)
+    market_index_map = {m.date: m.kosdaq for m in market_indices}
+
+    chart_data = []
+    for s in past_60_stocks:
+        chart_data.append({
+            'date': s.reference_date.strftime('%Y-%m-%d'),
+            'close': float(s.close_price) if s.close_price else None,
+            'kosdaq': float(market_index_map.get(s.reference_date, 0)) if market_index_map.get(s.reference_date) else None
+        })
+
+    context = {
+        'company': company,
+        'stock_data': stock_data,
+        'index_data': index_data,
+        'finance_data': finance_data,
+        'chart_data_json': chart_data,
+    }
+    return render(request, 'overview.html', context)
 
 def finance(request, stock_code=None):
     def empty_competitiveness_radar_context(target_stock_code=None):
