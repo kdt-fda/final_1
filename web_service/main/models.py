@@ -6,7 +6,7 @@ class Basic(models.Model):
     corp_code = models.CharField(max_length=15, blank=True, null=True) # dart 기업 코드
     corp_name = models.CharField(max_length=100, blank=True, null=True) # 기업명
     est_dt = models.CharField(max_length=20, blank=True, null=True) # 설립일
-    ipo = models.CharField(max_length=20, blank=True, null=True) # 상장일
+    ipo = models.CharField(max_length=20, blank=True, null=True)  #상장일
     ind_code = models.ForeignKey('IndBasic', models.DO_NOTHING, db_column='ind_code', blank=True, null=True) # 산업 코드(업종 코드)
     is_active = models.IntegerField(blank=True, null=True) # 활성화 여부, True만 홈페이지에 보여줌
     updated_at = models.DateTimeField() # db 업데이트 된 날짜 확인용
@@ -31,6 +31,7 @@ class CompanyFinance(models.Model):
     stock_code = models.CharField(max_length=10)
     corp_code = models.CharField(max_length=15)
     biz_year = models.IntegerField()
+    currency = models.CharField(max_length=20, blank=True, null=True)
     total_assets = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     cash_and_equivalents = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
     current_assets = models.DecimalField(max_digits=20, decimal_places=0, blank=True, null=True)
@@ -47,7 +48,6 @@ class CompanyFinance(models.Model):
     cashholding_ratio_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
     sales_growth_rate_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
     gross_margin_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
-    psr = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
     roe = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
     net_margin_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
     debt_ratio_pct = models.DecimalField(max_digits=20, decimal_places=6, blank=True, null=True)
@@ -144,24 +144,36 @@ class FeatureRaw(models.Model):
     stock_code = models.CharField(max_length=10, db_column='stock_code')
     date = models.DateField(db_column='date')
     
-    close = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
-    trading_value = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
-    foreign_netbuy_value = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
-    inst_netbuy_value = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
-    corp_code = models.CharField(max_length=15, blank=True, null=True)
+    close = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    trading_value = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    foreign_netbuy_value = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    inst_netbuy_value = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    per = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    pbr = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+    mkt_cap = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'FEATURE_RAW'
+        unique_together = (('stock_code', 'date'),)
+
+
+class FeatureRawD(models.Model):
+    stock_code = models.CharField(max_length=10)
+    corp_code = models.CharField(max_length=15)
     net_income = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     equity = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     op_profit = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     revenue = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     disclosure_date = models.DateField(blank=True, null=True)
-    biz_year = models.IntegerField(blank=True, null=True)
-    per = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
-    pbr = models.DecimalField(max_digits=18, decimal_places=6, blank=True, null=True)
+    biz_year = models.IntegerField()
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'FEATURE_RAW'
-        unique_together = (('stock_code', 'date', 'biz_year'), ('stock_code', 'date'),)
+        db_table = 'FEATURE_RAW_D'
+        unique_together = (('corp_code', 'biz_year'),)
 
 
 class IndBasic(models.Model):
@@ -353,3 +365,13 @@ class DjangoSession(models.Model):
     class Meta:
         managed = False
         db_table = 'django_session'
+
+
+class Users(models.Model):
+    name = models.CharField(max_length=50)
+    email = models.CharField(max_length=100, blank=True, null=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'users'
