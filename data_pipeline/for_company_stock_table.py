@@ -163,16 +163,24 @@ def get_existing_records(conn, start_date_str: str, end_date_str: str) -> set:
 
 # 여러 날짜에 대해 한 종목의 피쳐들을 한 번에 파싱하는 함수
 def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, end_dt, finance_map: dict) -> pd.DataFrame:
-    end_ymd = end_dt.strftime("%Y%m%d")
-    start_ymd = start_dt.strftime("%Y%m%d")
+    if not missing_dates:
+        return pd.DataFrame()
     
-    # 누적 이평선 및 52주 최고/최저가를 위해 누락일의 최대 1년 전 데이터까지 포괄
-    start_history_ymd = (start_dt - pd.Timedelta(days=365)).strftime("%Y%m%d")
-
-    df_ohlcv = stock.get_market_ohlcv_by_date(start_history_ymd, end_ymd, stock_code, adjusted=False) # 시가, 고가, 저가, 종가, 거래량, 거래대금, 등략률 있음(날짜 인덱스)
-    df_cap = stock.get_market_cap_by_date(start_ymd, end_ymd, stock_code) # 시가총액, 거래량, 거래대금, 상장주식수 있음(날짜 인덱스)
-    df_fund = stock.get_market_fundamental_by_date(start_ymd, end_ymd, stock_code) # BPS, PER, PBR, EPS, DIV, DPS 있음 (날짜 인덱스)
-    df_fore = stock.get_exhaustion_rates_of_foreign_investment_by_date(start_ymd, end_ymd, stock_code) # 상장주식수, 외국인보유수량, 외국인 지분율, 외국인한도수량, 외국인한도소진률 있음 (날짜 인덱스)
+    # 누락된 날짜 중 가장 빠른 날짜와 늦은 날짜 구하기
+    min_missing_dt = pd.to_datetime(min(missing_dates))
+    max_missing_dt = pd.to_datetime(max(missing_dates))
+    
+    fetch_start_ymd = min_missing_dt.strftime("%Y%m%d")
+    fetch_end_ymd = max_missing_dt.strftime("%Y%m%d")
+    
+    # 누적 이평선 및 52주 최고/최저가를 위해 OHLCV만 누락일 기준 1년 전까지 포괄
+    start_history_ymd = (min_missing_dt - pd.Timedelta(days=365)).strftime("%Y%m%d")
+    
+    # 90일 고정이 아닌, 실제 필요한 최소 구간(fetch_start_ymd ~ fetch_end_ymd)만 API 호출
+    df_ohlcv = stock.get_market_ohlcv_by_date(start_history_ymd, fetch_end_ymd, stock_code, adjusted=False) # 시가, 고가, 저가, 종가, 거래량, 거래대금, 등략률 있음(날짜 인덱스)
+    df_cap = stock.get_market_cap_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # 시가총액, 거래량, 거래대금, 상장주식수 있음(날짜 인덱스)
+    df_fund = stock.get_market_fundamental_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # BPS, PER, PBR, EPS, DIV, DPS 있음 (날짜 인덱스)
+    df_fore = stock.get_exhaustion_rates_of_foreign_investment_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # 상장주식수, 외국인보유수량, 외국인 지분율, 외국인한도수량, 외국인한도소진률 있음 (날짜 인덱스)
 
     results = [] # 각 날짜별로 정리된 데이터를 담기 위한 빈 리스트
     for m_date_str in missing_dates: # db에 빠져 있는 날짜들 하나씩 가져오기
