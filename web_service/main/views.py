@@ -91,7 +91,7 @@ def home(request):
                     'code': stock_code_str,
                     'name': company_name,
                     'price': f"{close_price:,}",
-                    'change_text': f"{sign}{price_change:,} ({change_rate:.2f}%)",
+                    'change_text': f"{sign}{price_change:,}원 ({change_rate:.2f}%)",
                     'css_class': css_class
                 })
 
@@ -673,7 +673,7 @@ def industry(request, stock_code=None):
         if value is None:
             return '-'
         try:
-            return f"{int(value):,}"
+            return f"{int(value):,}원"
         except (TypeError, ValueError):
             return '-'
 
@@ -697,7 +697,7 @@ def industry(request, stock_code=None):
             sign = ''
             css_class = 'flat'
 
-        return f"{sign}{abs(change_value):,}({abs(rate_value):.2f}%)", css_class
+        return f"{sign}{abs(change_value):,}원 ({abs(rate_value):.2f}%)", css_class
 
     def company_topic_particle(name):
         text = str(name).strip() if name is not None else ''

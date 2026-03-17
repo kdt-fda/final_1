@@ -41,7 +41,7 @@
         /* TOP 10 섹션 디자인*/
         .top10-section { text-align: left; margin-top: 60px; width: 100%; }
         .top10-section h3 { font-size: 1.6rem; margin-bottom: 25px; color: #222; } /* 거래대금 TOP10에 대한 스타일 */
-        .top10-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; } /* 주식 10개 들어가는 외부 부분 격자 스타일로 */
+        .top10-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(5, auto); grid-auto-flow: column; row-gap: 0; column-gap: 28px; } /* 주식 10개 들어가는 외부 부분 격자 스타일로 */
         
         .stock-item { /* 주식 블록 외부 디자인 */
             display: flex; justify-content: space-between; align-items: center; /* 글자들 세로 방향에서 정중앙에 오게 함*/
@@ -78,14 +78,14 @@
     </form> 
 
     <div class="top10-section">
-        <h3>거래대금 TOP 10</h3>
+        <h3>거래대금 TOP 10 종목 보기</h3>
         <div class="top10-grid">
             {% for stock in top_stocks %}
             <a href="{% url 'ai_page' stock.code %}" class="stock-item"> <!-- 나중에 요약 페이지로 이동하게 수정하기 -->
                 <span class="rank">{{ forloop.counter }}</span>
                 <span class="corp-name">{{ stock.name }}</span>
                 <div class="price-box">
-                    <span class="price">{{ stock.price }}</span>
+                    <span class="price">{{ stock.price }}원</span>
                     <span class="fluct {{ stock.css_class }}"> <!-- 여기서 views.py에서 계산한 up, down, flat이 들어감 -->
                         {{ stock.change_text }}
                     </span>
