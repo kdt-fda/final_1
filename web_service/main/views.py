@@ -669,6 +669,7 @@ def finance(request, stock_code=None):
             'available': False,
             'guide': FINANCIAL_METRIC_DESCRIPTIONS.get(label, ''),
             'footnote': DEBT_RATIO_FOOTNOTE if label == '부채비율' else None,
+            'note': None,
             'message': message,
         }
 
@@ -685,6 +686,7 @@ def finance(request, stock_code=None):
         higher_is_better=True,
         benchmark_value=None,
         benchmark_label='피어그룹 중앙값',
+        marker_tone_func=None,
     ):
         valid_series = pd.Series(series).dropna()
         if company_value is None or pd.isna(company_value) or valid_series.empty:
@@ -701,6 +703,7 @@ def finance(request, stock_code=None):
         company_value_display = format_percent_metric(company_value)
         company_top_percent = score_to_top_percent(company_score)
         benchmark_top_percent = score_to_top_percent(benchmark_score)
+        marker_tone_func = marker_tone_func or get_text_rank_tone
 
         return {
             'label': label,
@@ -714,9 +717,10 @@ def finance(request, stock_code=None):
             'benchmark_position': benchmark_position,
             'company_top_percent': company_top_percent,
             'benchmark_top_percent': benchmark_top_percent,
-            'company_rank_tone': get_rank_tone(company_top_percent),
-            'benchmark_rank_tone': get_rank_tone(benchmark_top_percent),
+            'company_rank_tone': marker_tone_func(company_top_percent),
+            'benchmark_rank_tone': marker_tone_func(benchmark_top_percent),
             'company_text_rank_tone': get_text_rank_tone(company_top_percent),
+            'note': None,
             'description': f"{company.corp_name}의 {label}은 {company_value_display}로, 코스닥 내 상위 {company_top_percent}%입니다.",
         }
 
@@ -907,18 +911,21 @@ def finance(request, stock_code=None):
                     company_finance_row.get('debt_ratio_pct'),
                     higher_is_better=False,
                     benchmark_value=get_median_numeric_value(peer_finance_year_df['debt_ratio_pct']),
+                    marker_tone_func=get_text_rank_tone,
                 ),
                 build_percentile_metric(
                     '자기자본비율',
                     finance_year_df['equity_ratio_pct'],
                     company_finance_row.get('equity_ratio_pct'),
                     benchmark_value=get_median_numeric_value(peer_finance_year_df['equity_ratio_pct']),
+                    marker_tone_func=get_text_rank_tone,
                 ),
                 build_percentile_metric(
                     '유동비율',
                     finance_year_df['current_ratio_pct'],
                     company_finance_row.get('current_ratio_pct'),
                     benchmark_value=get_median_numeric_value(peer_finance_year_df['current_ratio_pct']),
+                    marker_tone_func=get_text_rank_tone,
                 ),
             ])
             revenue_growth_metric = build_percentile_metric(
@@ -963,12 +970,10 @@ def finance(request, stock_code=None):
             revenue_growth_metric or build_unavailable_metric('매출성장률'),
             eps_metric or build_unavailable_metric('EPS 성장률'),
         ]
-
-        growth_note_parts = []
         if resolved_finance_year is not None:
-            growth_note_parts.append(f"재무 기준 {resolved_finance_year}년")
+            growth_metrics[0]['note'] = f"기준 사업연도 {resolved_finance_year}년"
         if resolved_eps_date is not None:
-            growth_note_parts.append(f"EPS 기준 {resolved_eps_date.strftime('%Y-%m-%d')}")
+            growth_metrics[1]['note'] = f"EPS 기준 {resolved_eps_date.strftime('%Y-%m-%d')}"
 
         return [
             {
@@ -987,7 +992,7 @@ def finance(request, stock_code=None):
             },
             {
                 'title': '성장성 지표',
-                'note': ' / '.join(growth_note_parts) if growth_note_parts else None,
+                'note': None,
                 'metrics': growth_metrics,
                 'column_count': 2,
                 'footnote': None,
@@ -1338,14 +1343,21 @@ def industry(request, stock_code=None):
 
         current_row = industry_qs.filter(stock_code=company_obj.stock_code).first()
         company_rank = None
+        company_rank_tone = 'neutral'
         if current_row and current_row.latest_mktcap is not None:
             company_rank = (
                 industry_with_mktcap.filter(latest_mktcap__gt=current_row.latest_mktcap).count() + 1
             )
+            total_count = industry_qs.count()
+            if total_count > 0 and company_rank / total_count <= 0.5:
+                company_rank_tone = 'green'
+            else:
+                company_rank_tone = 'yellow'
 
         return {
             'industry_total_count': industry_qs.count(),
             'company_rank': company_rank,
+            'company_rank_tone': company_rank_tone,
             'industry_top10_left': top10[:5],
             'industry_top10_right': top10[5:],
             'reference_date': reference_date,
@@ -1466,6 +1478,7 @@ def industry(request, stock_code=None):
             'ind_def': None,
             'industry_total_count': 0,
             'company_rank': None,
+            'company_rank_tone': 'neutral',
             'industry_top10_left': [],
             'industry_top10_right': [],
             'industry_reference_date': None,
@@ -1481,6 +1494,7 @@ def industry(request, stock_code=None):
 
     industry_total_count = 0
     company_rank = None
+    company_rank_tone = 'neutral'
     industry_top10_left = []
     industry_top10_right = []
     industry_reference_date = None
@@ -1493,6 +1507,7 @@ def industry(request, stock_code=None):
             marketcap_data = get_industry_marketcap_data(company)
             industry_total_count = marketcap_data['industry_total_count']
             company_rank = marketcap_data['company_rank']
+            company_rank_tone = marketcap_data['company_rank_tone']
             industry_top10_left = marketcap_data['industry_top10_left']
             industry_top10_right = marketcap_data['industry_top10_right']
             industry_reference_date = marketcap_data['reference_date']
@@ -1520,6 +1535,7 @@ def industry(request, stock_code=None):
         'ind_def': ind_def,
         'industry_total_count': industry_total_count,
         'company_rank': company_rank,
+        'company_rank_tone': company_rank_tone,
         'industry_top10_left': industry_top10_left,
         'industry_top10_right': industry_top10_right,
         'industry_reference_date': industry_reference_date,
