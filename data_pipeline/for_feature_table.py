@@ -395,7 +395,7 @@ def collect_single_ticker(
 
     t_ohlcv = _stage_start("OHLCV")
     ohlcv = safe_pykrx_call(
-        stock.get_market_ohlcv_by_date, from_dt, to_dt, stock_code, adjusted=False
+        stock.get_market_ohlcv_by_date, from_dt, to_dt, stock_code, adjusted=True
     )
     _stage_done("OHLCV", t_ohlcv, f"rows={len(ohlcv)}")
 
