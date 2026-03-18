@@ -81,7 +81,7 @@
         <h3>거래대금 TOP 10</h3>
         <div class="top10-grid">
             {% for stock in top_stocks %}
-            <a href="{% url 'overview' stock.code %}" class="stock-item"> <!-- 나중에 요약 페이지로 이동하게 수정하기 -->
+            <a href="{% url 'overview' stock.code %}" class="stock-item">
                 <span class="rank">{{ forloop.counter }}</span>
                 <span class="corp-name">{{ stock.name }}</span>
                 <div class="price-box">
