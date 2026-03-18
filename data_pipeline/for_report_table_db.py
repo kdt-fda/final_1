@@ -72,7 +72,7 @@ def upload_to_report_ai(gpt, batch_job):
                     
                     # DB 업데이트 (항목별 동적 컬럼 지정)
                     column_name = f"{key}_ai"
-                    sql = f"UPDATE report SET {column_name} = %s WHERE id = %s"
+                    sql = f"UPDATE REPORT SET {column_name} = %s WHERE id = %s"
                     cursor.execute(sql, (content, r_id))
                     success_count += 1
                     
