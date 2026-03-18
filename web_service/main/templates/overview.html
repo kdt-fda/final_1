@@ -1,163 +1,90 @@
 <!DOCTYPE html>
-{% load static %}
-{% load humanize %} <html lang="ko">
-
+{% load static humanize %} <!-- 홈 아이콘 사용하려면 이거 해줘야됨. 아이콘은 web_service/main/static/main 폴더 안에 넣기 -->
+<html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ company.corp_name }} 요약 정보</title>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
-        /* 공통 스타일 유지 */
+        /* body랑 .container까지 home이랑 search 제외하고 스타일 통일 */
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
             background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
-            margin: 0;
-            display: flex;
+            margin: 0; 
+            display: flex; 
             flex-direction: column;
             min-height: 100vh;
+            overflow-y: scroll;
         }
+        .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 56px 64px; box-sizing: border-box; }
+        
+        /* 홈 아이콘 스타일 부분, home이랑 search 제외하고 스타일 통일 */
+        .home-icon { display: block; width: 56px; height: auto; opacity: 0.9;}
+        .home-link { display: inline-flex; align-items: center; text-decoration: none; transition: opacity 0.2s; }
+        .home-link:hover { opacity: 0.9; }
 
-        .container {
-            width: 100%;
-            max-width: 1320px;
-            margin: 0 auto;
-            padding: 40px 56px 64px;
-            box-sizing: border-box;
-        }
-
-        .home-icon {
-            display: block;
-            width: 56px;
-            height: auto;
-            opacity: 0.9;
-        }
-
-        .home-link {
-            display: inline-flex;
-            align-items: center;
-            text-decoration: none;
-            transition: opacity 0.2s;
-        }
-
-        .home-link:hover {
-            opacity: 0.9;
-        }
-
-        .header-nav {
-            display: flex;
-            align-items: center;
-            width: 100%;
-            margin-top: 10px;
-            position: relative;
-        }
-
-        .tabs {
-            display: flex;
-            justify-content: flex-end;
-            gap: 15px;
-            margin-left: auto;
-            flex-wrap: wrap;
-        }
-
+        /* 상단 네비게이션 탭부분도 home이랑 search 제외하고 스타일 통일 */
+        .header-nav { display: flex; align-items: center; width: 100%; margin-top: 10px; position: relative; }
+        .tabs { display: flex; justify-content: flex-end; gap: 15px; margin-left: auto; flex-wrap: wrap; }
         .tab-item {
-            padding: 12px 30px;
-            border-radius: 25px;
-            background: rgba(255, 255, 255, 0.6);
-            text-decoration: none;
-            color: #555;
-            font-weight: bold;
-            border: 1px solid rgba(255, 255, 255, 0.8);
+            padding: 12px 30px; border-radius: 25px; background: rgba(255, 255, 255, 0.6);
+            text-decoration: none; color: #555; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.8);
             transition: all 0.3s;
         }
+        .tab-item.active { background: #fff; color: #3498db; border-color: #3498db; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .tab-item:hover { background: #fff; transform: translateY(-2px); }
 
-        .tab-item.active {
-            background: #fff;
-            color: #3498db;
-            border-color: #3498db;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        /* 기업 정보 헤더 */
+        .company-info-header { margin-top: 48px; }
+        .company-info-header h1 { margin: 0; font-size: clamp(2rem, 4.2vw, 3.4rem); letter-spacing: -1px; font-weight: 800; color: #050505; }
+        .industry-text { margin: 10px 0 0; font-size: clamp(1.2rem, 2.2vw, 1.8rem); font-weight: 600; color: #767676; letter-spacing: -0.3px; }
+
+        /* 섹션 카드 외부 감싸개 */
+        .section-block { margin-top: 44px; }
+
+        /* 섹션 카드 공통 디자인 */
+        .card { 
+            background: #fff; border-radius: 20px; padding: 40px; margin-top: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 100%; box-sizing: border-box; /* border-box로 전체 너비 고정 */
         }
-
-        .tab-item:hover {
-            background: #fff;
-            transform: translateY(-2px);
-        }
-
-        .company-info-header {
-            margin-top: 48px;
-        }
-
-        .company-info-header h1 {
-            margin: 0;
-            font-size: clamp(2rem, 4.2vw, 3.4rem);
-            letter-spacing: -1px;
-            font-weight: 800;
-            color: #050505;
-        }
-
-        .industry-text {
-            margin: 10px 0 0;
-            font-size: clamp(1.2rem, 2.2vw, 1.8rem);
-            font-weight: 600;
-            color: #767676;
-            letter-spacing: -0.3px;
-        }
-
-        .section-block {
-            margin-top: 44px;
-        }
-
-        .card {
-            background: #fff;
-            border-radius: 20px;
-            padding: 40px;
-            margin-top: 12px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .card-title {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin: 0;
-            border-left: 6px solid #3498db;
-            padding-left: 15px;
+        .card-title { 
+            font-size: 1.5rem; font-weight: bold; margin: 0;
+            border-left: 6px solid #3498db; padding-left: 15px; /* 제목 앞에 파란색 세로 실선 줘서 포인트 주기 */
         }
 
         /* 기본정보 테이블 스타일 */
         .info-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 12px 15px; /* Reduced gap further */
-            font-size: 0.85rem; /* Drastically reduced font size */
-        }
+            gap: 12px 15px; 
+            font-size: 0.85rem;
+        } /* 화면 2등분 하는 부분 */
 
         .info-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #f0f0f0;
-            padding-bottom: 8px; /* Reduced padding */
-        }
+            padding-bottom: 8px;
+        } /* 기본정보 각 줄의 스타일, 값 양끝 배치 및 하단에 구분선 */
 
         .info-label {
             color: #555;
             white-space: nowrap;
             flex-shrink: 0;
-            /* Removed font-weight */
-        }
+        } /* 현재가, 상장일 같은 항목 이름 스타일, 줄바꿈 안생기게 고정 */
 
         .info-value {
             color: #000;
             text-align: right;
             word-break: keep-all;
             margin-left: 10px;
-            /* Removed font-weight */
-        }
+        } /* 실제 각 항목의 데이터 값 스타일, 검정색, 오른쪽 정렬 */
 
-        /* 텍스트 줄바꿈 처리 */
+        /* 주요주주 부분, 가로 전체칸 사용하도록 설정 */
         .major-shareholders {
             grid-column: 1 / -1;
             margin-top: 10px;
@@ -168,26 +95,8 @@
             width: 100%;
             height: 400px;
             margin-top: 20px;
-        }
+        } /* 차트가 들어갈 박스 크기랑 위쪽 여백 지정 */
 
-        .two-column-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            margin-top: 44px;
-        }
-
-        .two-column-layout .section-block {
-            margin-top: 0;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .two-column-layout .card {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
     </style>
 </head>
 
@@ -211,12 +120,12 @@
             <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
         </section>
 
-        <div class="two-column-layout">
-            <section class="section-block">
-                <h2 class="card-title">기본 정보</h2>
-                <div class="card">
-                    <div class="info-grid">
-                        <div class="info-row"><span class="info-label">현재가</span> <span class="info-value">{{ stock_data.close_price|default:"-"|intcomma }} 원</span></div>
+        <section class="section-block">
+            <h2 class="card-title">기본 정보</h2> <!-- 기본정보 부분 -->
+            <div class="card" style="display: flex; gap: 40px; flex-wrap: wrap;"> <!-- 카드 박스, 표랑 차트 가로 배치하기 위함 -->
+                <div style="flex: 1; min-width: 400px;">
+                    <div class="info-grid"> <!-- 전부 다 어제 날짜 기준 제일 최신 개장일 값임, 값없으면 '-'로 표시되고, 컨마 붙여주는 부분-->
+                        <div class="info-row"><span class="info-label">현재가</span> <span class="info-value">{{ stock_data.close_price|default:"-"|intcomma }} 원</span></div> 
                         <div class="info-row"><span class="info-label">액면가</span> <span class="info-value">{{ stock_data.book_value|default:"-"|intcomma }} 원</span></div>
                         <div class="info-row"><span class="info-label">52주 최고가</span> <span class="info-value">{{ stock_data.wk52_high|default:"-"|intcomma }} 원</span></div>
                         <div class="info-row"><span class="info-label">52주 최저가</span> <span class="info-value">{{ stock_data.wk52_low|default:"-"|intcomma }} 원</span></div>
@@ -231,26 +140,23 @@
 
                         <div class="major-shareholders">
                             <span class="info-label">주요주주:</span>
-                            <div style="margin-top: 8px; color:#333;">
+                            <div style="margin-top: 8px; color:#333;"> <!-- 주요주주는 디폴트가 정보 없음으로 -->
                                 {{ finance_data.maj_shareholders|default:"정보 없음"|linebreaksbr }}
                             </div>
                         </div>
                     </div>
                 </div>
-            </section>
-
-            <section class="section-block">
-                <h2 class="card-title">Relative Performance (최근 60일)</h2>
-                <div class="card">
-                    <div class="chart-container">
-                        <canvas id="performanceChart"></canvas>
+                <div style="flex: 1; min-width: 400px; display: flex; flex-direction: column;">
+                    <h3 style="font-size: 1.25rem; font-weight: bold; margin: 0 0 15px 0; color: #333;">Relative Performance</h3> <!-- 차트 위 제목 -->
+                    <div class="chart-container" style="flex: 1; margin-top: 0;">
+                        <canvas id="performanceChart"></canvas> <!-- 차트 부분 -->
                     </div>
                 </div>
-            </section>
-        </div>
+            </div>
+        </section>
     </div>
 
-    {{ chart_data_json|json_script:"chart-data" }}
+    {{ chart_data_json|json_script:"chart-data" }} <!-- 딕셔너리 형태 받아서 실제 json 형태로 변경 -->
 
     <script>
         document.addEventListener("DOMContentLoaded", function () {

@@ -29,8 +29,8 @@ def create_batch_file():
                         r.id, r.stock_code, b.corp_name,
                         r.history_origin, r.outline_origin, r.product_origin, r.sales_origin,
                         r.history_ai, r.outline_ai, r.product_ai, r.sales_ai, r.product_ratio_ai
-                    FROM report r
-                    JOIN basic b ON r.stock_code = b.stock_code
+                    FROM REPORT r
+                    JOIN BASIC b ON r.stock_code = b.stock_code
                     WHERE r.history_ai IS NULL OR r.history_ai = ''
                     OR r.outline_ai IS NULL OR r.outline_ai = ''
                     OR r.product_ai IS NULL OR r.product_ai = ''
@@ -58,7 +58,7 @@ def create_batch_file():
                     prev_sql = """
                         SELECT history_origin, history_ai, outline_origin, outline_ai, 
                                product_origin, product_ai, product_ratio_ai, sales_origin, sales_ai
-                        FROM report 
+                        FROM REPORT 
                         WHERE stock_code = %s AND id < %s 
                         ORDER BY id DESC LIMIT 1
                     """
@@ -124,7 +124,7 @@ def create_batch_file():
                     # 계승된 답변이 있다면 즉시 DB 업데이트
                     if inheritance_updates:
                         set_clause = ", ".join([f"{k} = %s" for k in inheritance_updates.keys()])
-                        cursor.execute(f"UPDATE report SET {set_clause} WHERE id = %s", 
+                        cursor.execute(f"UPDATE REPORT SET {set_clause} WHERE id = %s", 
                                        list(inheritance_updates.values()) + [row['id']])
                     
                     # 각 기업별 처리가 끝날 때마다 커밋 (안전장치)
@@ -134,24 +134,26 @@ def create_batch_file():
         print((f"DB 연결 또는 쿼리 실행 중 오류 발생: {e}"))
         return None
 
-    # 누락 데이터가 있는 기업 요약 출력 ---
+    # 기존 데이터 계승(스킵) 리포트 출력
     print("\n" + "="*50)
-    print("[데이터 누락 기업 및 항목 리포트] ")
+    print("[데이터 계승(스킵) 및 비용 절감 리포트] ")
     print("="*50)
-    missing_corp_count = 0
+    skipped_corp_count = 0
 
-    for corp, status in generation_report.items():
-        missing = [k for k, v in status.items() if v == 0]
-        if missing:
-            print(f"{corp:20} | 누락: {', '.join(missing)}")
-            missing_corp_count += 1
     
-    if missing_corp_count == 0:
-        print("모든 데이터가 완벽합니다!")
-        
+    for corp, status in generation_report.items():
+        # v == 0 인 항목은 원문이 동일하여 API 호출 없이 기존 답변을 계승한 항목
+        skipped = [k for k, v in status.items() if v == 0]
+        if skipped:
+            print(f"{corp:20} | 계승(스킵) 완료: {', '.join(skipped)}")
+            skipped_corp_count += 1
+    
+    if skipped_corp_count == 0:
+        print("계승할 과거 데이터가 없어 모든 항목에 대해 새로운 AI 작업이 요청되었습니다.")
+    
     else:
         print("-" * 50)
-        print(f"총 {missing_corp_count}개 기업에서 데이터 누락이 발견되었습니다.")
+        print(f"총 {skipped_corp_count}개 기업에서 데이터를 성공적으로 계승하여 API 비용을 방어했습니다.")
         print("="*50 + "\n")
         
     # 새로 요청할 작업이 아예 없을 경우 빈 파일 생성 방지
