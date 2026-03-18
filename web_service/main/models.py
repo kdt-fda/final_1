@@ -88,6 +88,7 @@ class CompanyStock(models.Model):
     fluc_rt = models.DecimalField(max_digits=9, decimal_places=4, blank=True, null=True)
     dps = models.DecimalField(max_digits=18, decimal_places=4, blank=True, null=True)
     eps = models.DecimalField(max_digits=18, decimal_places=4, blank=True, null=True)
+    eps_1yearago = models.DecimalField(max_digits=18, decimal_places=4, blank=True, null=True)
     dividend_yield = models.DecimalField(max_digits=6, decimal_places=3, blank=True, null=True)
     per = models.DecimalField(max_digits=10, decimal_places=4, blank=True, null=True)
     pbr = models.DecimalField(max_digits=10, decimal_places=4, blank=True, null=True)

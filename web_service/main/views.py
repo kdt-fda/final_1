@@ -54,7 +54,7 @@ FINANCIAL_METRIC_DESCRIPTIONS = {
     '부채비율': '기업이 얼마나 많은 부채를 활용하고 있는지를 보여주는 지표',
     '유동비율': '기업이 단기 부채를 상환할 수 있는 능력을 보여주는 지표',
     '자기자본비율': '기업의 자산 중 자기자본이 차지하는 비중을 보여주는 지표',
-    'EPS 성장률': '주당 이익이 얼마나 증가했는지를 보여주는 지표',
+    'EPS 성장률': '주당순이익(EPS)이 얼마나 증가했는지를 보여주는 지표 (1년 전 대비)',
 }
 DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 안정성이 높은 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
 
@@ -108,16 +108,25 @@ def home(request):
     return render(request, 'home.html', {'count': count, 'top_stocks': top_stocks})
 
 def search(request):
-    query = request.GET.get('q', '')
+    query = request.GET.get('q', '').strip()
     
     if query:
+        if len(query) == 6 and query.isdigit():
+            exact_company = Basic.objects.filter(stock_code=query, is_active=True).first()
+            if exact_company:
+                return redirect('overview', stock_code=exact_company.stock_code)
+
+        exact_name_results = Basic.objects.filter(corp_name__iexact=query, is_active=True)
+        if exact_name_results.count() == 1:
+            return redirect('overview', stock_code=exact_name_results.first().stock_code)
+
         # 기업명에 검색어가 포함된 데이터를 찾음. 여기서 활성화 된 애만 검색 가능함
         # 여기서 원하는 속성만 가져오려면 뒤에 .values('corp_name', 'stock_code') 처럼 쓰면 됨
         results = Basic.objects.filter(corp_name__icontains=query, is_active=True) # corp_name에서 대소문자 구분 없이, query가 포함되고, is_active=True인 데이터 가져옴
         
-        # 중복이 없으므로, 결과가 딱 1개라면 바로 AI 페이지로 이동
+        # 중복이 없으므로, 결과가 딱 1개라면 바로 요약 페이지로 이동
         if results.count() == 1:
-            return redirect('ai_page', stock_code=results.first().stock_code)
+            return redirect('overview', stock_code=results.first().stock_code)
     else:
         results = []
 
@@ -575,9 +584,8 @@ def finance(request, stock_code=None):
             Basic.objects.filter(ind_code=company_obj.ind_code, is_active=True)
             .values_list('stock_code', flat=True)
         )
-        peer_count = len(peer_codes)
 
-        if not peer_codes:
+        if not peer_codes or reference_day is None:
             return {
                 'per': '-',
                 'pbr': '-',
@@ -586,22 +594,14 @@ def finance(request, stock_code=None):
                 'count': 0,
             }
 
-        latest_reference_subquery = (
-            CompanyStock.objects.filter(
-                stock_code=OuterRef('stock_code'),
-                reference_date__lte=reference_day,
-            )
-            .order_by('-reference_date')
-            .values('reference_date')[:1]
-        )
-
-        peer_stocks = (
+        peer_stocks = list(
             CompanyStock.objects.filter(
                 stock_code__in=peer_codes,
-                reference_date=Subquery(latest_reference_subquery),
+                reference_date=reference_day,
             )
             .values('eps', 'dps', 'per', 'pbr', 'dividend_yield')
         )
+        peer_count = len(peer_stocks)
 
         per_list, pbr_list, div_list, payout_list = [], [], [], []
         for peer_stock in peer_stocks:
@@ -661,7 +661,9 @@ def finance(request, stock_code=None):
             return 'green'
         return 'yellow'
 
-    def build_unavailable_metric(label, message):
+    def build_unavailable_metric(label, message=None):
+        if message is None:
+            message = f"확인 가능한 {label} 정보가 없습니다."
         return {
             'label': label,
             'available': False,
@@ -742,44 +744,41 @@ def finance(request, stock_code=None):
     def build_eps_growth_dataframe(stock_codes):
         stock_records = list(
             CompanyStock.objects.filter(stock_code__in=stock_codes)
-            .values('stock_code', 'reference_date', 'eps')
+            .values('stock_code', 'reference_date', 'eps', 'eps_1yearago')
             .order_by('stock_code', 'reference_date')
         )
         if not stock_records:
-            return pd.DataFrame(columns=['stock_code', 'reference_date', 'eps', 'prev_eps', 'eps_growth_rate_pct'])
+            return pd.DataFrame(columns=['stock_code', 'reference_date', 'eps', 'eps_1yearago', 'eps_growth_rate_pct'])
 
         stock_df = pd.DataFrame.from_records(stock_records)
         stock_df['stock_code'] = stock_df['stock_code'].astype(str)
         stock_df['reference_date'] = pd.to_datetime(stock_df['reference_date'], errors='coerce')
         stock_df['eps'] = pd.to_numeric(stock_df['eps'], errors='coerce')
+        stock_df['eps_1yearago'] = pd.to_numeric(stock_df['eps_1yearago'], errors='coerce')
         stock_df = stock_df.dropna(subset=['stock_code', 'reference_date']).copy()
         stock_df = stock_df.sort_values(['stock_code', 'reference_date']).reset_index(drop=True)
-        stock_df['prev_eps'] = stock_df.groupby('stock_code')['eps'].shift(1)
-        stock_df['eps_growth_rate_pct'] = ((stock_df['eps'] - stock_df['prev_eps']) / stock_df['prev_eps']) * 100
+        stock_df['eps_growth_rate_pct'] = ((stock_df['eps'] - stock_df['eps_1yearago']) / stock_df['eps_1yearago'].abs()) * 100
         stock_df.loc[
-            stock_df['eps'].isna() | stock_df['prev_eps'].isna() | (stock_df['prev_eps'] == 0),
+            stock_df['eps'].isna() | stock_df['eps_1yearago'].isna() | (stock_df['eps_1yearago'].abs() == 0),
             'eps_growth_rate_pct'
         ] = pd.NA
         return stock_df
 
     def resolve_latest_reference_date(metric_df, target_stock_code, metric_column):
-        if metric_df.empty or active_company_count <= 0:
+        if metric_df.empty:
             return None
 
         valid_df = metric_df.dropna(subset=[metric_column]).copy()
         if valid_df.empty:
             return None
 
-        required_count = max(1, math.ceil(active_company_count * COMPETITIVENESS_YEAR_CONFIRM_RATIO))
-        date_counts = valid_df.groupby('reference_date')['stock_code'].nunique()
         target_dates = (
             valid_df.loc[valid_df['stock_code'] == target_stock_code, 'reference_date']
             .dropna()
             .tolist()
         )
 
-        candidate_dates = [dt for dt in target_dates if int(date_counts.get(dt, 0)) >= required_count]
-        return max(candidate_dates) if candidate_dates else None
+        return max(target_dates) if target_dates else None
 
     def build_financial_percentile_sections(target_stock_code):
         target_stock_code = str(target_stock_code)
@@ -931,23 +930,23 @@ def finance(request, stock_code=None):
 
         if not profitability_metrics:
             profitability_metrics = [
-                build_unavailable_metric('ROE', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
-                build_unavailable_metric('순이익률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('ROE'),
+                build_unavailable_metric('순이익률'),
             ]
         else:
-            profitability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
+            profitability_metrics = [metric or build_unavailable_metric(label) for metric, label in zip(
                 profitability_metrics,
                 ['ROE', '순이익률']
             )]
 
         if not stability_metrics:
             stability_metrics = [
-                build_unavailable_metric('부채비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
-                build_unavailable_metric('유동비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
-                build_unavailable_metric('자기자본비율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+                build_unavailable_metric('부채비율'),
+                build_unavailable_metric('유동비율'),
+                build_unavailable_metric('자기자본비율'),
             ]
         else:
-            stability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
+            stability_metrics = [metric or build_unavailable_metric(label) for metric, label in zip(
                 stability_metrics,
                 ['부채비율', '자기자본비율', '유동비율']
             )]
@@ -961,8 +960,8 @@ def finance(request, stock_code=None):
                 benchmark_value=get_median_numeric_value(peer_eps_date_df['eps_growth_rate_pct']),
             )
         growth_metrics = [
-            revenue_growth_metric or build_unavailable_metric('매출성장률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
-            eps_metric or build_unavailable_metric('EPS 성장률', '조건을 만족하는 기준일 데이터를 찾지 못했습니다.'),
+            revenue_growth_metric or build_unavailable_metric('매출성장률'),
+            eps_metric or build_unavailable_metric('EPS 성장률'),
         ]
 
         growth_note_parts = []
@@ -1036,7 +1035,7 @@ def finance(request, stock_code=None):
         reference_date__lte=base_date
     ).order_by('reference_date')
     chart_data = build_chart_data(stock_qs)
-    peer_medians = build_peer_medians(company, yesterday)
+    peer_medians = build_peer_medians(company, base_date)
 
     per_info_missing = True
     pbr_info_missing = True
@@ -1153,8 +1152,10 @@ def industry(request, stock_code=None):
             'benchmark_sales_growth': [],
             'asset_trend_title': default_title,
             'asset_trend_desc': default_desc,
+            'asset_trend_tone': 'neutral',
             'sales_trend_title': default_title,
             'sales_trend_desc': default_desc,
+            'sales_trend_tone': 'neutral',
         }
 
     def empty_structure_context():
@@ -1168,7 +1169,7 @@ def industry(request, stock_code=None):
     def get_trend_message(values, message_map):
         valid = [v for v in values if v is not None]
         if len(valid) < 3:
-            return '데이터 부족', '최근 3개년 데이터가 충분하지 않아 추세를 판단하기 어렵습니다.'
+            return '데이터 부족', '최근 3개년 데이터가 충분하지 않아 추세를 판단하기 어렵습니다.', 'neutral'
 
         prev2, prev1, recent = valid[-3], valid[-2], valid[-1]
         first = '상승' if prev1 >= prev2 else '하락'
@@ -1176,7 +1177,7 @@ def industry(request, stock_code=None):
 
         return message_map.get(
             (first, second),
-            ('데이터 부족', '최근 3개년 데이터가 충분하지 않아 추세를 판단하기 어렵습니다.'),
+            ('데이터 부족', '최근 3개년 데이터가 충분하지 않아 추세를 판단하기 어렵습니다.', 'neutral'),
         )
 
     def get_industry_growth_data(company_obj):
@@ -1207,16 +1208,17 @@ def industry(request, stock_code=None):
         ]
 
         asset_message_map = {
-            ('상승', '상승'): ('📈 자산 성장 지속', '최근 산업의 자산 규모가 계속 커지고 있습니다.'),
+            ('상승', '상승'): ('자산 성장 지속', '최근 산업의 자산 규모가 계속 커지고 있습니다.', 'positive'),
             (
                 '상승',
                 '하락',
             ): (
-                '📉 자산 성장 둔화',
+                '자산 성장 둔화',
                 '이전 기간 대비 증가율이 낮아졌습니다.\n산업 성장 속도가 다소 둔화된 흐름입니다.',
+                'negative',
             ),
-            ('하락', '상승'): ('🔄 자산 회복 신호', '줄어들던 자산이 다시 증가세로 전환되었습니다.'),
-            ('하락', '하락'): ('📉 자산 감소 지속', '산업 자산 규모가 계속 줄어드는 흐름입니다.'),
+            ('하락', '상승'): ('자산 회복 신호', '줄어들던 자산이 다시 증가세로 전환되었습니다.', 'positive'),
+            ('하락', '하락'): ('자산 감소 지속', '산업 자산 규모가 계속 줄어드는 흐름입니다.', 'negative'),
         }
 
         sales_message_map = {
@@ -1224,34 +1226,38 @@ def industry(request, stock_code=None):
                 '상승',
                 '상승',
             ): (
-                '📈 매출 성장 지속',
+                '매출 성장 지속',
                 '최근 산업의 매출 규모가 계속 확대되고 있습니다.\n시장 수요가 유지되며 성장 흐름이 이어지는 모습입니다.',
+                'positive',
             ),
             (
                 '상승',
                 '하락',
             ): (
-                '📉 매출 성장 둔화',
+                '매출 성장 둔화',
                 '이전 기간 대비 매출 증가율이 낮아졌습니다.\n산업 매출 성장 속도가 다소 완만해진 흐름입니다.',
+                'negative',
             ),
             (
                 '하락',
                 '상승',
             ): (
-                '🔄 매출 회복 신호',
+                '매출 회복 신호',
                 '감소하던 매출 증가율이 다시 상승세로 전환되었습니다.\n시장 수요가 회복되는 흐름일 수 있습니다.',
+                'positive',
             ),
             (
                 '하락',
                 '하락',
             ): (
-                '📉 매출 감소 지속',
+                '매출 감소 지속',
                 '산업 매출 증가율이 계속 낮아지고 있습니다.\n시장 수요가 약화되는 흐름일 수 있습니다.',
+                'negative',
             ),
         }
 
-        asset_trend_title, asset_trend_desc = get_trend_message(industry_asset, asset_message_map)
-        sales_trend_title, sales_trend_desc = get_trend_message(industry_sales, sales_message_map)
+        asset_trend_title, asset_trend_desc, asset_trend_tone = get_trend_message(industry_asset, asset_message_map)
+        sales_trend_title, sales_trend_desc, sales_trend_tone = get_trend_message(industry_sales, sales_message_map)
 
         return {
             'growth_chart_labels': years,
@@ -1261,22 +1267,55 @@ def industry(request, stock_code=None):
             'benchmark_sales_growth': benchmark_sales,
             'asset_trend_title': asset_trend_title,
             'asset_trend_desc': asset_trend_desc,
+            'asset_trend_tone': asset_trend_tone,
             'sales_trend_title': sales_trend_title,
             'sales_trend_desc': sales_trend_desc,
+            'sales_trend_tone': sales_trend_tone,
         }
 
     def get_industry_marketcap_data(company_obj):
-        latest_stock = CompanyStock.objects.filter(stock_code=OuterRef('stock_code')).order_by(
-            '-reference_date'
+        peer_codes = list(
+            Basic.objects.filter(
+                ind_code=company_obj.ind_code,
+                is_active=True,
+            ).values_list('stock_code', flat=True)
         )
+        reference_date = (
+            CompanyStock.objects.filter(stock_code=company_obj.stock_code)
+            .order_by('-reference_date')
+            .values_list('reference_date', flat=True)
+            .first()
+        )
+        if reference_date is None and peer_codes:
+            reference_date = (
+                CompanyStock.objects.filter(stock_code__in=peer_codes)
+                .order_by('-reference_date')
+                .values_list('reference_date', flat=True)
+                .first()
+            )
 
         industry_qs = Basic.objects.filter(
             ind_code=company_obj.ind_code,
             is_active=True,
         ).annotate(
-            latest_mktcap=Subquery(latest_stock.values('mktcap')[:1]),
-            latest_price_change=Subquery(latest_stock.values('price_change')[:1]),
-            latest_fluc_rt=Subquery(latest_stock.values('fluc_rt')[:1]),
+            latest_mktcap=Subquery(
+                CompanyStock.objects.filter(
+                    stock_code=OuterRef('stock_code'),
+                    reference_date=reference_date,
+                ).values('mktcap')[:1]
+            ),
+            latest_price_change=Subquery(
+                CompanyStock.objects.filter(
+                    stock_code=OuterRef('stock_code'),
+                    reference_date=reference_date,
+                ).values('price_change')[:1]
+            ),
+            latest_fluc_rt=Subquery(
+                CompanyStock.objects.filter(
+                    stock_code=OuterRef('stock_code'),
+                    reference_date=reference_date,
+                ).values('fluc_rt')[:1]
+            ),
         )
         industry_with_mktcap = industry_qs.filter(latest_mktcap__isnull=False)
 
@@ -1309,6 +1348,7 @@ def industry(request, stock_code=None):
             'company_rank': company_rank,
             'industry_top10_left': top10[:5],
             'industry_top10_right': top10[5:],
+            'reference_date': reference_date,
         }
 
     def build_io_name_map():
@@ -1428,6 +1468,7 @@ def industry(request, stock_code=None):
             'company_rank': None,
             'industry_top10_left': [],
             'industry_top10_right': [],
+            'industry_reference_date': None,
             'company_topic_particle': '은',
             **empty_structure_context(),
             **empty_growth_context(),
@@ -1442,6 +1483,7 @@ def industry(request, stock_code=None):
     company_rank = None
     industry_top10_left = []
     industry_top10_right = []
+    industry_reference_date = None
     growth_context = empty_growth_context()
     structure_context = empty_structure_context()
     selected_io_code = request.GET.get('io_code')
@@ -1453,6 +1495,7 @@ def industry(request, stock_code=None):
             company_rank = marketcap_data['company_rank']
             industry_top10_left = marketcap_data['industry_top10_left']
             industry_top10_right = marketcap_data['industry_top10_right']
+            industry_reference_date = marketcap_data['reference_date']
     except (ProgrammingError, OperationalError):
         pass
 
@@ -1479,6 +1522,7 @@ def industry(request, stock_code=None):
         'company_rank': company_rank,
         'industry_top10_left': industry_top10_left,
         'industry_top10_right': industry_top10_right,
+        'industry_reference_date': industry_reference_date,
         'company_topic_particle': company_topic_particle(company.corp_name),
         **structure_context,
         **growth_context,
