@@ -297,16 +297,50 @@ def load_ind_bok(conn, year: int):
         print(f"(롤백됨) IND_BOK {year} 적재 중 오류 발생: {e}")
 
 
+def get_missing_recent_ind_bok_years(conn, window: int = 5):
+    """
+    DB의 SYSDATE() 기준 최근 N개년 중 IND_BOK에 없는 연도 목록 반환
+    """
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT YEAR(SYSDATE()) AS current_year")
+        row = cursor.fetchone()
+        current_year = int(row["current_year"])
+
+        start_year = current_year - window + 1
+        target_years = list(range(start_year, current_year + 1))
+
+        cursor.execute(
+            """
+                SELECT DISTINCT year
+                FROM IND_BOK
+                WHERE year BETWEEN %s AND %s
+            """,
+            (start_year, current_year)
+        )
+        existing_years = {
+            int(item["year"])
+            for item in cursor.fetchall()
+            if item["year"] is not None
+        }
+
+    missing_years = [year for year in target_years if year not in existing_years]
+    return current_year, target_years, missing_years
+
+
 def load_ind_bok_all(conn):
     """
-    CSV에 있는 모든 연도 자동 적재
+    DB의 SYSDATE() 기준 최근 5개년 중 누락 연도만 자동 적재
     """
-    file_path = BASE_DIR / "data" / "rate_ind.csv"
-    df = pd.read_csv(file_path, encoding="utf-8-sig")
-    # 숫자로 된 컬럼 = 연도 컬럼
-    years = sorted([int(c) for c in df.columns if c.isdigit()])
-    print("적재할 연도:", years)
-    for year in years:
+    current_year, target_years, missing_years = get_missing_recent_ind_bok_years(conn)
+    print(f"DB SYSDATE 기준 연도: {current_year}")
+    print(f"최근 5개년 대상: {target_years}")
+
+    if not missing_years:
+        print("IND_BOK 최근 5개년 데이터가 모두 존재합니다.")
+        return
+
+    print(f"누락 연도 적재 시작: {missing_years}")
+    for year in missing_years:
         load_ind_bok(conn, year)
 
 
