@@ -23,7 +23,7 @@ def create_basic(conn):
                     ipo VARCHAR(20),
                     ind_code VARCHAR(10),
                     is_active BOOLEAN DEFAULT TRUE,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     CONSTRAINT fk_basic_ind_code FOREIGN KEY (ind_code) 
                     REFERENCES IND_BASIC(ind_code)
                     ON DELETE SET NULL ON UPDATE CASCADE
