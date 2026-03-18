@@ -147,15 +147,36 @@ def get_latest_ecos_year(stat_code: str = "271Y120") -> int:
     return int(latest_year)
 
 
-def fetch_ind_io_latest_df(stat_code: str = "271Y120") -> pd.DataFrame:
+def has_ind_io_year(conn, year: int) -> bool:
+    """
+    IND_IO에 해당 연도 데이터가 이미 존재하는지 확인
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM IND_IO
+            WHERE year = %s
+            LIMIT 1
+            """,
+            (year,)
+        )
+        return cur.fetchone() is not None
+
+
+def fetch_ind_io_latest_df(
+    stat_code: str = "271Y120",
+    latest_year: int | None = None
+) -> pd.DataFrame:
     """
     ECOS API에서 최신 연도 1개만 전체 조회해서
     IND_IO 적재용 DataFrame 반환
     반환 컬럼:
     trade_vol, year, out_io_code, in_io_code
     """
-    latest_year = get_latest_ecos_year(stat_code)
-    print(f"ECOS 최신 제공 연도: {latest_year}")
+    if latest_year is None:
+        latest_year = get_latest_ecos_year(stat_code)
+        print(f"ECOS 최신 제공 연도: {latest_year}")
 
     url = (
         f"https://ecos.bok.or.kr/api/StatisticSearch/{API_KEY}/json/kr/1/10000/"
@@ -222,13 +243,20 @@ def load_ind_io_latest(conn):
     """
     ECOS API 최신 연도 1개 조회 -> IND_IO 적재
     """
-    df = fetch_ind_io_latest_df()
+    latest_year = get_latest_ecos_year()
+    print(f"ECOS 최신 제공 연도: {latest_year}")
+
+    if has_ind_io_year(conn, latest_year):
+        print(f"IND_IO {latest_year}년 데이터가 이미 존재하여 적재를 건너뜁니다.")
+        return
+
+    df = fetch_ind_io_latest_df(latest_year=latest_year)
 
     if df.empty:
         print("적재할 데이터가 없습니다.")
         return
 
-    latest_year = int(df["year"].iloc[0])
+    loaded_year = int(df["year"].iloc[0])
 
     rows = list(
         df[["trade_vol", "year", "out_io_code", "in_io_code"]]
@@ -247,7 +275,7 @@ def load_ind_io_latest(conn):
 
     conn.commit()
 
-    print(f"IND_IO 최신 연도({latest_year}) 데이터 적재 완료: {len(rows)}건")
+    print(f"IND_IO 최신 연도({loaded_year}) 데이터 적재 완료: {len(rows)}건")
 
 
 if __name__ == "__main__":
