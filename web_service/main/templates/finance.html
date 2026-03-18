@@ -137,7 +137,7 @@
         .range-values { display: flex; justify-content: space-between; font-size: 1rem; margin-bottom: 8px; color: #444; line-height: 1.5; }
         .range-bar-bg { width: 100%; height: 10px; background: #e0e0e0; border-radius: 999px; position: relative; margin-top: 10px;}
         .range-marker {
-            position: absolute; width: 8px; height: 8px; background: #1677ff; border-radius: 50%;
+            position: absolute; width: 8px; height: 8px; background: #111; border-radius: 50%;
             top: 50%; transform: translate(-50%, -50%); box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18); z-index: 2;
         }
         .marker-label {
@@ -283,7 +283,7 @@
             letter-spacing: -0.02em;
         }
         .competitiveness-analysis-status.is-strong {
-            color: #1677ff;
+            color: #188038;
         }
         .competitiveness-analysis-status.is-weak {
             color: #8a94a6;
@@ -297,7 +297,7 @@
             letter-spacing: -0.02em;
         }
         .competitiveness-analysis-metric.is-strong {
-            color: #14345f;
+            color: #1f5d2f;
         }
         .competitiveness-analysis-metric.is-weak {
             color: #4b5565;
@@ -483,6 +483,8 @@
         .bar-visual-bg { width: 100%; background: #eee; height: 10px; border-radius: 5px; overflow: hidden; }
         .bar-visual-fill { height: 100%; border-radius: 5px; }
         .fill-company { background: #6b7cff; } /* 기업명 바 색상 */
+        .fill-company.tone-green { background: #188038; }
+        .fill-company.tone-yellow { background: #f9ab00; }
         .fill-peer { background: #d9d9d9; } /* 피어그룹 바 색상 */
         #volume-chart .apexcharts-selection-rect { cursor: grab; }
         .financial-percentile-card {
@@ -550,7 +552,7 @@
             box-shadow: 0 0 24px rgba(157, 125, 30, 0.14);
         }
         .financial-metric-intro {
-            margin: 12px 0 18px;
+            margin: 12px 0 3px;
             color: #555;
             font-size: 1.02rem;
             line-height: 1.5;
@@ -580,18 +582,16 @@
             box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18);
             z-index: 2;
         }
-        .financial-track-dot.is-company {
-            background: #1677ff;
-        }
-        .financial-track-dot.is-average {
-            background: #6b7280;
-        }
+        .financial-track-dot.tone-green { background: #188038; }
+        .financial-track-dot.tone-yellow { background: #f9ab00; }
+        .financial-track-dot.tone-red { background: #d93025; }
+        .financial-track-dot.tone-neutral { background: #6b7280; }
         .financial-track-bubble {
             position: absolute;
             min-width: 128px;
             width: max-content;
             max-width: none;
-            padding: 4px 8px;
+            padding: 7px 8px;
             border-radius: 10px;
             background: #fff;
             box-shadow: 0 0 18px rgba(17, 24, 39, 0.14);
@@ -614,7 +614,7 @@
         .financial-track-bubble strong {
             display: block;
             color: #555;
-            font-size: 1.04rem;
+            font-size: 1.02rem;
             font-weight: 500;
             white-space: nowrap;
             word-break: keep-all;
@@ -623,7 +623,7 @@
             display: block;
             margin-top: 1px;
             color: #555;
-            font-size: 1.04rem;
+            font-size: 1.02rem;
             font-weight: 700;
             white-space: nowrap;
         }
@@ -650,18 +650,34 @@
             font-weight: 600;
         }
         .financial-scale span:first-child {
-            color: #d93025;
+            color: #f9ab00;
         }
         .financial-scale span:last-child {
             color: #188038;
         }
         .financial-metric-description {
-            margin: 0;
+            margin: 0 0 24px;
             color: #555;
-            font-size: 1.04rem;
-            font-weight: 500;
+            font-size: 1.1rem;
+            font-weight: 700;
             line-height: 1.5;
             word-break: keep-all;
+        }
+        .financial-metric-description strong {
+            color: #333;
+            font-weight: 800;
+        }
+        .financial-rank-highlight.tone-green {
+            color: #188038;
+        }
+        .financial-rank-highlight.tone-yellow {
+            color: #f9ab00;
+        }
+        .financial-rank-highlight.tone-red {
+            color: #d93025;
+        }
+        .financial-rank-highlight.tone-neutral {
+            color: #6b7280;
         }
         .financial-metric-card.is-empty {
             display: flex;
@@ -686,6 +702,7 @@
             text-align: center;
         }
         .financial-metric-description.is-empty {
+            margin: 0;
             color: #7d5d12;
             font-weight: 600;
         }
@@ -697,6 +714,16 @@
             font-size: 0.92rem;
             line-height: 1.5;
             text-align: left;
+            word-break: keep-all;
+        }
+        .financial-metric-note {
+            width: 100%;
+            margin: auto 0 0;
+            padding-top: 16px;
+            color: #777;
+            font-size: 0.92rem;
+            line-height: 1.5;
+            text-align: right;
             word-break: keep-all;
         }
 
@@ -751,19 +778,19 @@
             }
             .financial-track-bubble {
                 min-width: 112px;
-                padding: 4px 7px;
+                padding: 6px 7px;
             }
             .financial-scale {
                 font-size: 0.92rem;
             }
             .financial-metric-description {
-                font-size: 0.96rem;
+                font-size: 1rem;
             }
             .financial-track-bubble strong {
-                font-size: 0.96rem;
+                font-size: 0.94rem;
             }
             .financial-track-bubble span {
-                font-size: 0.96rem;
+                font-size: 0.94rem;
             }
         }
 </style>
@@ -914,7 +941,7 @@
     <section class="section-block">
         <h2 class="card-title">가치평가지표</h2>
         <div class="card grid-2-col">
-            <div class="metric-item{% if valuation_alerts.pbr_is_complete_capital_impairment or pbr_info_missing %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.pbr_is_complete_capital_impairment or pbr_info_missing %} is-warning-state{% endif %}" data-compare-peer="true">
                 {% if valuation_alerts.pbr_is_complete_capital_impairment %}
                 <div class="metric-badge is-warning">PBR</div>
                 <div class="metric-desc is-warning">완전자본잠식 상태로, 누적 손실로 인해 부채가 자산을 초과합니다.<br>PBR 지표를 표시할 수 없습니다.</div>
@@ -942,7 +969,7 @@
                 {% endif %}
             </div>
 
-            <div class="metric-item{% if valuation_alerts.per_is_net_loss or per_info_missing %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss or per_info_missing %} is-warning-state{% endif %}" data-compare-peer="true">
                 {% if valuation_alerts.per_is_net_loss %}
                 <div class="metric-badge is-warning">PER</div>
                 <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>PER 지표를 표시할 수 없습니다.</div>
@@ -975,7 +1002,7 @@
     <section class="section-block">
         <h2 class="card-title">배당 지표</h2>
         <div class="card grid-2-col">
-            <div class="metric-item{% if dividend_info_missing %} is-warning-state{% endif %}">
+            <div class="metric-item{% if dividend_info_missing %} is-warning-state{% endif %}" data-compare-peer="true">
                 {% if dividend_info_missing %}
                 <div class="metric-badge is-warning">배당수익률</div>
                 <div class="metric-desc is-warning">확인 가능한 배당수익률 정보가 없습니다.</div>
@@ -1000,7 +1027,7 @@
                 {% endif %}
             </div>
 
-            <div class="metric-item{% if valuation_alerts.per_is_net_loss or payout_info_missing %} is-warning-state{% endif %}">
+            <div class="metric-item{% if valuation_alerts.per_is_net_loss or payout_info_missing %} is-warning-state{% endif %}" data-compare-peer="true">
                 {% if valuation_alerts.per_is_net_loss %}
                 <div class="metric-badge is-warning">배당 성향</div>
                 <div class="metric-desc is-warning">당기순손실이 발생하는 기업입니다.<br>배당 성향 지표를 표시할 수 없습니다.</div>
@@ -1043,14 +1070,15 @@
                         <div class="financial-metric-chip{% if not metric.available %} is-warning{% endif %}">{{ metric.label }}</div>
                         {% if metric.available %}
                         <p class="financial-metric-intro">{{ metric.guide }}</p>
+                        <p class="financial-metric-description">{{ company.corp_name }}의 {{ metric.label }}은 <strong>{{ metric.company_value_display }}</strong>로, 코스닥 내 <strong class="financial-rank-highlight tone-{{ metric.company_text_rank_tone }}">상위 {{ metric.company_top_percent }}%</strong>입니다.</p>
                         <div class="financial-track-shell">
                             <div class="financial-track-bubble is-company" style="left: clamp(64px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 64px));">
                                 <strong>{{ company.corp_name }}({{ metric.company_value_display }})</strong>
                                 <span>상위 {{ metric.company_top_percent }}%</span>
                             </div>
                             <div class="financial-track">
-                                <span class="financial-track-dot is-average" style="left: clamp(10px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 10px));"></span>
-                                <span class="financial-track-dot is-company" style="left: clamp(10px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                                <span class="financial-track-dot tone-neutral" style="left: clamp(10px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                                <span class="financial-track-dot tone-{{ metric.company_rank_tone }}" style="left: clamp(10px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 10px));"></span>
                             </div>
                             <div class="financial-track-bubble is-average" style="left: clamp(64px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 64px));">
                                 <strong>{{ metric.benchmark_label }}({{ metric.benchmark_value_display }})</strong>
@@ -1061,7 +1089,6 @@
                                 <span>0%</span>
                             </div>
                         </div>
-                        <p class="financial-metric-description">{{ metric.description }}</p>
                         {% else %}
                         <div class="financial-metric-empty-body">
                             <p class="financial-metric-description is-empty">{{ metric.message }}</p>
@@ -1069,6 +1096,9 @@
                         {% endif %}
                         {% if metric.footnote %}
                         <p class="financial-metric-footnote">{{ metric.footnote }}</p>
+                        {% endif %}
+                        {% if metric.note %}
+                        <p class="financial-metric-note">{{ metric.note }}</p>
                         {% endif %}
                     </article>
                     {% endfor %}
@@ -1147,6 +1177,8 @@ document.addEventListener("DOMContentLoaded", function() {
             rowData.forEach(item => {
                 if (!item.fill) return;
 
+                item.fill.classList.remove('tone-green', 'tone-yellow');
+
                 if (item.value === null || maxValue <= 0) {
                     item.fill.style.width = '0%';
                     item.fill.style.opacity = '0.2';
@@ -1158,6 +1190,17 @@ document.addEventListener("DOMContentLoaded", function() {
                 item.fill.style.width = `${Math.min(width, 100)}%`;
                 item.fill.style.opacity = '1';
             });
+
+            if (metricItem.dataset.comparePeer === 'true' && rowData.length >= 2) {
+                const companyRow = rowData[0];
+                const peerRow = rowData[1];
+
+                if (companyRow.fill && companyRow.value !== null && peerRow.value !== null) {
+                    companyRow.fill.classList.add(
+                        companyRow.value >= peerRow.value ? 'tone-green' : 'tone-yellow'
+                    );
+                }
+            }
         });
     }
 

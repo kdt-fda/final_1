@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -35,7 +36,10 @@
         }
         .search-button { /* 돋보기 버튼의 위치 설정, 버튼에 입히는 기본 설정을 none으로 해서 돋보기 아이콘만 딱 보이게 함 */
             position: absolute; right: -35px; top: 50%; transform: translateY(-50%);
-            background: none; border: none; cursor: pointer; font-size: 1.5rem; /* poineter로 돋보기 버튼에 마우스 올리면 커서가 손모양으로 바뀜, 돋보기 크기 1.5rem으로 */
+            background: none; border: none; cursor: pointer; padding: 0; line-height: 0;
+        }
+        .search-button img {
+            width: 28px; height: 28px; display: block; object-fit: contain;
         }
 
         /* TOP 10 섹션 디자인*/
@@ -73,8 +77,10 @@
     </div> <!-- 다만 count의 경우 기본적으로 제공하는 것이기 때문에 views.py에서 전달만 해주면 됨, 여기선 전달한 key 값을 명시해 주는 것 -->
 
     <form action="{% url 'search' %}" method="get" class="search-container"> <!-- 일단은 search에서 query가 1개면 리다이렉트하는 방식임, url에 내가 검색한 단어 주소창에 넣어서 전달하게 됨-->
-        <input type="text" name="q" class="search-input" placeholder="기업명을 입력하세요" required> <!-- 여기서 q 안에 들어 있는 내용으로 search에서 판단하게 되는 것 -->
-        <button type="submit" class="search-button">🔍</button>
+        <input type="text" name="q" class="search-input" placeholder="기업명/종목코드를 검색하세요" required> <!-- 여기서 q 안에 들어 있는 내용으로 search에서 판단하게 되는 것 -->
+        <button type="submit" class="search-button" aria-label="검색">
+            <img src="{% static 'main/search.png' %}" alt="">
+        </button>
     </form> 
 
     <div class="top10-section">
