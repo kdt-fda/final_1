@@ -283,7 +283,7 @@
             letter-spacing: -0.02em;
         }
         .competitiveness-analysis-status.is-strong {
-            color: #1677ff;
+            color: #188038;
         }
         .competitiveness-analysis-status.is-weak {
             color: #8a94a6;
@@ -297,7 +297,7 @@
             letter-spacing: -0.02em;
         }
         .competitiveness-analysis-metric.is-strong {
-            color: #14345f;
+            color: #1f5d2f;
         }
         .competitiveness-analysis-metric.is-weak {
             color: #4b5565;
@@ -550,7 +550,7 @@
             box-shadow: 0 0 24px rgba(157, 125, 30, 0.14);
         }
         .financial-metric-intro {
-            margin: 12px 0 18px;
+            margin: 12px 0 3px;
             color: #555;
             font-size: 1.02rem;
             line-height: 1.5;
@@ -580,18 +580,16 @@
             box-shadow: 0 3px 10px rgba(17, 24, 39, 0.18);
             z-index: 2;
         }
-        .financial-track-dot.is-company {
-            background: #1677ff;
-        }
-        .financial-track-dot.is-average {
-            background: #6b7280;
-        }
+        .financial-track-dot.tone-green { background: #188038; }
+        .financial-track-dot.tone-yellow { background: #f9ab00; }
+        .financial-track-dot.tone-red { background: #d93025; }
+        .financial-track-dot.tone-neutral { background: #6b7280; }
         .financial-track-bubble {
             position: absolute;
             min-width: 128px;
             width: max-content;
             max-width: none;
-            padding: 4px 8px;
+            padding: 7px 8px;
             border-radius: 10px;
             background: #fff;
             box-shadow: 0 0 18px rgba(17, 24, 39, 0.14);
@@ -614,7 +612,7 @@
         .financial-track-bubble strong {
             display: block;
             color: #555;
-            font-size: 1.04rem;
+            font-size: 1.02rem;
             font-weight: 500;
             white-space: nowrap;
             word-break: keep-all;
@@ -623,7 +621,7 @@
             display: block;
             margin-top: 1px;
             color: #555;
-            font-size: 1.04rem;
+            font-size: 1.02rem;
             font-weight: 700;
             white-space: nowrap;
         }
@@ -650,18 +648,34 @@
             font-weight: 600;
         }
         .financial-scale span:first-child {
-            color: #d93025;
+            color: #f9ab00;
         }
         .financial-scale span:last-child {
             color: #188038;
         }
         .financial-metric-description {
-            margin: 0;
+            margin: 0 0 24px;
             color: #555;
-            font-size: 1.04rem;
-            font-weight: 500;
+            font-size: 1.1rem;
+            font-weight: 700;
             line-height: 1.5;
             word-break: keep-all;
+        }
+        .financial-metric-description strong {
+            color: #333;
+            font-weight: 800;
+        }
+        .financial-rank-highlight.tone-green {
+            color: #188038;
+        }
+        .financial-rank-highlight.tone-yellow {
+            color: #f9ab00;
+        }
+        .financial-rank-highlight.tone-red {
+            color: #d93025;
+        }
+        .financial-rank-highlight.tone-neutral {
+            color: #6b7280;
         }
         .financial-metric-card.is-empty {
             display: flex;
@@ -686,6 +700,7 @@
             text-align: center;
         }
         .financial-metric-description.is-empty {
+            margin: 0;
             color: #7d5d12;
             font-weight: 600;
         }
@@ -751,19 +766,19 @@
             }
             .financial-track-bubble {
                 min-width: 112px;
-                padding: 4px 7px;
+                padding: 6px 7px;
             }
             .financial-scale {
                 font-size: 0.92rem;
             }
             .financial-metric-description {
-                font-size: 0.96rem;
+                font-size: 1rem;
             }
             .financial-track-bubble strong {
-                font-size: 0.96rem;
+                font-size: 0.94rem;
             }
             .financial-track-bubble span {
-                font-size: 0.96rem;
+                font-size: 0.94rem;
             }
         }
 </style>
@@ -1043,14 +1058,15 @@
                         <div class="financial-metric-chip{% if not metric.available %} is-warning{% endif %}">{{ metric.label }}</div>
                         {% if metric.available %}
                         <p class="financial-metric-intro">{{ metric.guide }}</p>
+                        <p class="financial-metric-description">{{ company.corp_name }}의 {{ metric.label }}은 <strong>{{ metric.company_value_display }}</strong>로, 코스닥 내 <strong class="financial-rank-highlight tone-{{ metric.company_text_rank_tone }}">상위 {{ metric.company_top_percent }}%</strong>입니다.</p>
                         <div class="financial-track-shell">
                             <div class="financial-track-bubble is-company" style="left: clamp(64px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 64px));">
                                 <strong>{{ company.corp_name }}({{ metric.company_value_display }})</strong>
                                 <span>상위 {{ metric.company_top_percent }}%</span>
                             </div>
                             <div class="financial-track">
-                                <span class="financial-track-dot is-average" style="left: clamp(10px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 10px));"></span>
-                                <span class="financial-track-dot is-company" style="left: clamp(10px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                                <span class="financial-track-dot tone-neutral" style="left: clamp(10px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 10px));"></span>
+                                <span class="financial-track-dot tone-{{ metric.company_rank_tone }}" style="left: clamp(10px, {{ metric.company_position|floatformat:1 }}%, calc(100% - 10px));"></span>
                             </div>
                             <div class="financial-track-bubble is-average" style="left: clamp(64px, {{ metric.benchmark_position|floatformat:1 }}%, calc(100% - 64px));">
                                 <strong>{{ metric.benchmark_label }}({{ metric.benchmark_value_display }})</strong>
@@ -1061,7 +1077,6 @@
                                 <span>0%</span>
                             </div>
                         </div>
-                        <p class="financial-metric-description">{{ metric.description }}</p>
                         {% else %}
                         <div class="financial-metric-empty-body">
                             <p class="financial-metric-description is-empty">{{ metric.message }}</p>

@@ -54,10 +54,9 @@ FINANCIAL_METRIC_DESCRIPTIONS = {
     '부채비율': '기업이 얼마나 많은 부채를 활용하고 있는지를 보여주는 지표',
     '유동비율': '기업이 단기 부채를 상환할 수 있는 능력을 보여주는 지표',
     '자기자본비율': '기업의 자산 중 자기자본이 차지하는 비중을 보여주는 지표',
-    '매출액 증가율': '기업의 매출 규모가 얼마나 성장했는지를 보여주는 지표',
     'EPS 성장률': '주당 이익이 얼마나 증가했는지를 보여주는 지표',
 }
-DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 우수한 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
+DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 안정성이 높은 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
 
 def home(request):
     count = Report.objects.count()
@@ -646,6 +645,22 @@ def finance(request, stock_code=None):
         top_percent = int(round(100 - float(score)))
         return min(100, max(1, top_percent if top_percent > 0 else 1))
 
+    def get_rank_tone(top_percent):
+        if top_percent is None or pd.isna(top_percent):
+            return 'neutral'
+        if float(top_percent) <= 30:
+            return 'green'
+        if float(top_percent) <= 70:
+            return 'yellow'
+        return 'red'
+
+    def get_text_rank_tone(top_percent):
+        if top_percent is None or pd.isna(top_percent):
+            return 'neutral'
+        if float(top_percent) <= 50:
+            return 'green'
+        return 'yellow'
+
     def build_unavailable_metric(label, message):
         return {
             'label': label,
@@ -697,6 +712,9 @@ def finance(request, stock_code=None):
             'benchmark_position': benchmark_position,
             'company_top_percent': company_top_percent,
             'benchmark_top_percent': benchmark_top_percent,
+            'company_rank_tone': get_rank_tone(company_top_percent),
+            'benchmark_rank_tone': get_rank_tone(benchmark_top_percent),
+            'company_text_rank_tone': get_text_rank_tone(company_top_percent),
             'description': f"{company.corp_name}의 {label}은 {company_value_display}로, 코스닥 내 상위 {company_top_percent}%입니다.",
         }
 
@@ -704,7 +722,7 @@ def finance(request, stock_code=None):
         if finance_df.empty or active_company_count <= 0:
             return None
 
-        valid_df = finance_df.dropna(subset=required_fields).copy()
+        valid_df = finance_df[finance_df[required_fields].notna().any(axis=1)].copy()
         if valid_df.empty:
             return None
 
@@ -866,16 +884,10 @@ def finance(request, stock_code=None):
 
         profitability_metrics = []
         stability_metrics = []
-        growth_metrics = []
+        revenue_growth_metric = None
 
         if company_finance_row is not None:
             profitability_metrics.extend([
-                build_percentile_metric(
-                    '매출성장률',
-                    finance_year_df['sales_growth_rate_pct'],
-                    company_finance_row.get('sales_growth_rate_pct'),
-                    benchmark_value=get_median_numeric_value(peer_finance_year_df['sales_growth_rate_pct']),
-                ),
                 build_percentile_metric(
                     'ROE',
                     finance_year_df['roe'],
@@ -898,37 +910,34 @@ def finance(request, stock_code=None):
                     benchmark_value=get_median_numeric_value(peer_finance_year_df['debt_ratio_pct']),
                 ),
                 build_percentile_metric(
-                    '유동비율',
-                    finance_year_df['current_ratio_pct'],
-                    company_finance_row.get('current_ratio_pct'),
-                    benchmark_value=get_median_numeric_value(peer_finance_year_df['current_ratio_pct']),
-                ),
-                build_percentile_metric(
                     '자기자본비율',
                     finance_year_df['equity_ratio_pct'],
                     company_finance_row.get('equity_ratio_pct'),
                     benchmark_value=get_median_numeric_value(peer_finance_year_df['equity_ratio_pct']),
                 ),
-            ])
-            growth_metrics.append(
                 build_percentile_metric(
-                    '매출액 증가율',
-                    finance_year_df['revenue_growth_custom_pct'],
-                    company_finance_row.get('revenue_growth_custom_pct'),
-                    benchmark_value=get_median_numeric_value(peer_finance_year_df['revenue_growth_custom_pct']),
-                )
+                    '유동비율',
+                    finance_year_df['current_ratio_pct'],
+                    company_finance_row.get('current_ratio_pct'),
+                    benchmark_value=get_median_numeric_value(peer_finance_year_df['current_ratio_pct']),
+                ),
+            ])
+            revenue_growth_metric = build_percentile_metric(
+                '매출성장률',
+                finance_year_df['revenue_growth_custom_pct'],
+                company_finance_row.get('revenue_growth_custom_pct'),
+                benchmark_value=get_median_numeric_value(peer_finance_year_df['revenue_growth_custom_pct']),
             )
 
         if not profitability_metrics:
             profitability_metrics = [
-                build_unavailable_metric('매출성장률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
                 build_unavailable_metric('ROE', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
                 build_unavailable_metric('순이익률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
             ]
         else:
             profitability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
                 profitability_metrics,
-                ['매출성장률', 'ROE', '순이익률']
+                ['ROE', '순이익률']
             )]
 
         if not stability_metrics:
@@ -940,7 +949,7 @@ def finance(request, stock_code=None):
         else:
             stability_metrics = [metric or build_unavailable_metric(label, '표시 가능한 지표 데이터가 없습니다.') for metric, label in zip(
                 stability_metrics,
-                ['부채비율', '유동비율', '자기자본비율']
+                ['부채비율', '자기자본비율', '유동비율']
             )]
 
         eps_metric = None
@@ -951,10 +960,9 @@ def finance(request, stock_code=None):
                 company_eps_row.get('eps_growth_rate_pct'),
                 benchmark_value=get_median_numeric_value(peer_eps_date_df['eps_growth_rate_pct']),
             )
-        growth_metrics.append(eps_metric or build_unavailable_metric('EPS 성장률', '조건을 만족하는 기준일 데이터를 찾지 못했습니다.'))
         growth_metrics = [
-            growth_metrics[0] if growth_metrics and growth_metrics[0] is not None else build_unavailable_metric('매출액 증가율', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
-            growth_metrics[1],
+            revenue_growth_metric or build_unavailable_metric('매출성장률', '조건을 만족하는 사업연도 데이터를 찾지 못했습니다.'),
+            eps_metric or build_unavailable_metric('EPS 성장률', '조건을 만족하는 기준일 데이터를 찾지 못했습니다.'),
         ]
 
         growth_note_parts = []
