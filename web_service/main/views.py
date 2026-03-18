@@ -118,7 +118,7 @@ def search(request):
         
         # 중복이 없으므로, 결과가 딱 1개라면 바로 AI 페이지로 이동
         if results.count() == 1:
-            return redirect('ai_page', stock_code=results.first().stock_code)
+            return redirect('overview', stock_code=results.first().stock_code)
     else:
         results = []
 
@@ -176,6 +176,30 @@ def overview(request, stock_code=None):
     stock_data = CompanyStock.objects.filter(stock_code=stock_code, reference_date=latest_date).first()
     index_data = MarketIndex.objects.filter(date=latest_date).first()
     finance_data = CompanyFinance.objects.filter(stock_code=stock_code).order_by('-biz_year').first()
+
+    if stock_data and stock_data.mktcap:
+        try:
+            stock_data.mktcap = int(float(stock_data.mktcap) / 1000000)
+        except (ValueError, TypeError):
+            pass
+
+    if finance_data and finance_data.maj_shareholders:
+        import re
+        maj_text = finance_data.maj_shareholders
+        if '계' in maj_text:
+            maj_text = maj_text.split('계')[0]
+        maj_lines = [line.strip() for line in maj_text.split('|') if line.strip()]
+        
+        parsed_lines = []
+        for line in maj_lines:
+            match = re.search(r'([\d\.]+)\s*%', line)
+            pct = float(match.group(1)) if match else 0.0
+            parsed_lines.append((pct, line))
+            
+        parsed_lines.sort(key=lambda x: x[0], reverse=True)
+        top_3_lines = [item[1] for item in parsed_lines[:3]]
+        
+        finance_data.maj_shareholders = '\n'.join(top_3_lines)
 
     # 3. 차트용 데이터 (최신 교집합 날짜 기준 역순 60일치 가져와서 정방향 정렬)
     past_60_stocks = list(CompanyStock.objects.filter(

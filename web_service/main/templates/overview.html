@@ -1,220 +1,351 @@
 <!DOCTYPE html>
 {% load static %}
 {% load humanize %} <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ company.corp_name }} 요약 정보</title>
-    
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* 공통 스타일 유지 */
         body {
             font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
             background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%);
-            margin: 0; 
-            display: flex; 
+            margin: 0;
+            display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
-        .container { width: 100%; max-width: 1320px; margin: 0 auto; padding: 40px 56px 64px; box-sizing: border-box; }
-        
-        .home-icon { display: block; width: 56px; height: auto; opacity: 0.9;}
-        .home-link { display: inline-flex; align-items: center; text-decoration: none; transition: opacity 0.2s; }
-        .home-link:hover { opacity: 0.9; }
 
-        .header-nav { display: flex; align-items: center; width: 100%; margin-top: 10px; position: relative; }
-        .tabs { display: flex; justify-content: flex-end; gap: 15px; margin-left: auto; flex-wrap: wrap; }
+        .container {
+            width: 100%;
+            max-width: 1320px;
+            margin: 0 auto;
+            padding: 40px 56px 64px;
+            box-sizing: border-box;
+        }
+
+        .home-icon {
+            display: block;
+            width: 56px;
+            height: auto;
+            opacity: 0.9;
+        }
+
+        .home-link {
+            display: inline-flex;
+            align-items: center;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .home-link:hover {
+            opacity: 0.9;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            margin-left: auto;
+            flex-wrap: wrap;
+        }
+
         .tab-item {
-            padding: 12px 30px; border-radius: 25px; background: rgba(255, 255, 255, 0.6);
-            text-decoration: none; color: #555; font-weight: bold; border: 1px solid rgba(255, 255, 255, 0.8);
+            padding: 12px 30px;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.6);
+            text-decoration: none;
+            color: #555;
+            font-weight: bold;
+            border: 1px solid rgba(255, 255, 255, 0.8);
             transition: all 0.3s;
         }
-        .tab-item.active { background: #fff; color: #3498db; border-color: #3498db; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .tab-item:hover { background: #fff; transform: translateY(-2px); }
 
-        .company-info-header { margin-top: 48px; }
-        .company-info-header h1 { margin: 0; font-size: clamp(2rem, 4.2vw, 3.4rem); letter-spacing: -1px; font-weight: 800; color: #050505; }
-        .industry-text { margin: 10px 0 0; font-size: clamp(1.2rem, 2.2vw, 1.8rem); font-weight: 600; color: #767676; letter-spacing: -0.3px; }
-
-        .section-block { margin-top: 44px; }
-        .card { 
-            background: #fff; border-radius: 20px; padding: 40px; margin-top: 12px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.04); width: 100%; box-sizing: border-box; 
+        .tab-item.active {
+            background: #fff;
+            color: #3498db;
+            border-color: #3498db;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
-        .card-title { 
-            font-size: 1.5rem; font-weight: bold; margin: 0;
-            border-left: 6px solid #3498db; padding-left: 15px; 
+
+        .tab-item:hover {
+            background: #fff;
+            transform: translateY(-2px);
+        }
+
+        .company-info-header {
+            margin-top: 48px;
+        }
+
+        .company-info-header h1 {
+            margin: 0;
+            font-size: clamp(2rem, 4.2vw, 3.4rem);
+            letter-spacing: -1px;
+            font-weight: 800;
+            color: #050505;
+        }
+
+        .industry-text {
+            margin: 10px 0 0;
+            font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+            font-weight: 600;
+            color: #767676;
+            letter-spacing: -0.3px;
+        }
+
+        .section-block {
+            margin-top: 44px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px;
+            margin-top: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 0;
+            border-left: 6px solid #3498db;
+            padding-left: 15px;
         }
 
         /* 기본정보 테이블 스타일 */
         .info-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 20px 40px;
-            font-size: 1.15rem;
+            gap: 12px 15px; /* Reduced gap further */
+            font-size: 0.85rem; /* Drastically reduced font size */
         }
+
         .info-row {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             border-bottom: 1px solid #f0f0f0;
-            padding-bottom: 10px;
+            padding-bottom: 8px; /* Reduced padding */
         }
-        .info-label { color: #555; font-weight: 600; }
-        .info-value { color: #000; font-weight: bold; text-align: right; }
-        
+
+        .info-label {
+            color: #555;
+            white-space: nowrap;
+            flex-shrink: 0;
+            /* Removed font-weight */
+        }
+
+        .info-value {
+            color: #000;
+            text-align: right;
+            word-break: keep-all;
+            margin-left: 10px;
+            /* Removed font-weight */
+        }
+
         /* 텍스트 줄바꿈 처리 */
         .major-shareholders {
             grid-column: 1 / -1;
             margin-top: 10px;
             line-height: 1.6;
         }
-        
+
         .chart-container {
             width: 100%;
             height: 400px;
             margin-top: 20px;
         }
+
+        .two-column-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 44px;
+        }
+
+        .two-column-layout .section-block {
+            margin-top: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .two-column-layout .card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
     </style>
 </head>
+
 <body>
 
-<div class="container">
-    <header class="header-nav">
-        <a href="{% url 'home' %}" class="home-link">
-            <img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon">
-        </a>
-        <nav class="tabs">
-            <a href="{% url 'overview' company.stock_code %}" class="tab-item active">요약</a>
-            <a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
-            <a href="{% url 'finance' company.stock_code %}" class="tab-item">재무 정보</a>
-            <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
-        </nav>
-    </header>
+    <div class="container">
+        <header class="header-nav">
+            <a href="{% url 'home' %}" class="home-link">
+                <img src="{% static 'main/home_icon_final.png' %}?v=20260310-1620" alt="홈으로 이동" class="home-icon">
+            </a>
+            <nav class="tabs">
+                <a href="{% url 'overview' company.stock_code %}" class="tab-item active">요약</a>
+                <a href="{% url 'ai_page' company.stock_code %}" class="tab-item">사업 정보</a>
+                <a href="{% url 'finance' company.stock_code %}" class="tab-item">재무 정보</a>
+                <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
+            </nav>
+        </header>
 
-    <section class="company-info-header"> 
-        <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
-        <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
-    </section>
+        <section class="company-info-header">
+            <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
+            <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
+        </section>
 
-    <section class="section-block">
-        <h2 class="card-title">기본 정보</h2>
-        <div class="card">
-            <div class="info-grid">
-                <div class="info-row"><span class="info-label">현재가</span> <span class="info-value">{{ stock_data.close_price|default:"-"|intcomma }} 원</span></div>
-                <div class="info-row"><span class="info-label">액면가</span> <span class="info-value">{{ stock_data.book_value|default:"-"|intcomma }} 원</span></div>
-                <div class="info-row"><span class="info-label">52주 최고가</span> <span class="info-value">{{ stock_data.wk52_high|default:"-"|intcomma }} 원</span></div>
-                <div class="info-row"><span class="info-label">52주 최저가</span> <span class="info-value">{{ stock_data.wk52_low|default:"-"|intcomma }} 원</span></div>
-                <div class="info-row"><span class="info-label">시가총액</span> <span class="info-value">{{ stock_data.mktcap|default:"-"|intcomma }} 억 원</span></div>
-                <div class="info-row"><span class="info-label">발행주식수</span> <span class="info-value">{{ stock_data.shares_btj|default:"-"|intcomma }} 주</span></div>
-                <div class="info-row"><span class="info-label">평균거래량(60일)</span> <span class="info-value">{{ stock_data.acc_trdvol|default:"-"|intcomma }} 주</span></div>
-                <div class="info-row"><span class="info-label">평균거래대금(60일)</span> <span class="info-value">{{ stock_data.acc_trdval|default:"-"|intcomma }} 원</span></div>
-                <div class="info-row"><span class="info-label">외국인지분</span> <span class="info-value">{{ stock_data.foreign_ratio|default:"-" }} %</span></div>
-                <div class="info-row"><span class="info-label">자본금</span> <span class="info-value">{{ finance_data.capital_stock|default:"-"|intcomma }} 억 원</span></div>
-                <div class="info-row"><span class="info-label">KOSPI</span> <span class="info-value">{{ index_data.kospi|default:"-"|floatformat:2 }}</span></div>
-                <div class="info-row"><span class="info-label">KOSDAQ</span> <span class="info-value">{{ index_data.kosdaq|default:"-"|floatformat:2 }}</span></div>
-                
-                <div class="major-shareholders">
-                    <span class="info-label">주요주주:</span> 
-                    <div style="margin-top: 8px; color:#333; font-size:1.05rem;">
-                        {{ finance_data.maj_shareholders|default:"정보 없음"|linebreaksbr }}
+        <div class="two-column-layout">
+            <section class="section-block">
+                <h2 class="card-title">기본 정보</h2>
+                <div class="card">
+                    <div class="info-grid">
+                        <div class="info-row"><span class="info-label">현재가</span> <span class="info-value">{{ stock_data.close_price|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">액면가</span> <span class="info-value">{{ stock_data.book_value|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">52주 최고가</span> <span class="info-value">{{ stock_data.wk52_high|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">52주 최저가</span> <span class="info-value">{{ stock_data.wk52_low|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">시가총액</span> <span class="info-value">{{ stock_data.mktcap|default:"-"|intcomma }} 백만원</span></div>
+                        <div class="info-row"><span class="info-label">발행주식수</span> <span class="info-value">{{ stock_data.shares_btj|default:"-"|intcomma }} 주</span></div>
+                        <div class="info-row"><span class="info-label">평균거래량(60일)</span> <span class="info-value">{{ stock_data.acc_trdvol|default:"-"|intcomma }} 주</span></div>
+                        <div class="info-row"><span class="info-label">평균거래대금(60일)</span> <span class="info-value">{{ stock_data.acc_trdval|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">외국인지분</span> <span class="info-value">{{ stock_data.foreign_ratio|default:"-" }} %</span></div>
+                        <div class="info-row"><span class="info-label">자본금</span> <span class="info-value">{{ finance_data.capital_stock|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">KOSPI</span> <span class="info-value">{{ index_data.kospi|default:"-"|floatformat:2 }}</span></div>
+                        <div class="info-row"><span class="info-label">KOSDAQ</span> <span class="info-value">{{ index_data.kosdaq|default:"-"|floatformat:2 }}</span></div>
+
+                        <div class="major-shareholders">
+                            <span class="info-label">주요주주:</span>
+                            <div style="margin-top: 8px; color:#333;">
+                                {{ finance_data.maj_shareholders|default:"정보 없음"|linebreaksbr }}
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
+
+            <section class="section-block">
+                <h2 class="card-title">Relative Performance (최근 60일)</h2>
+                <div class="card">
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+            </section>
         </div>
-    </section>
+    </div>
 
-    <section class="section-block">
-        <h2 class="card-title">Relative Performance (최근 60일)</h2>
-        <div class="card">
-            <div class="chart-container">
-                <canvas id="performanceChart"></canvas>
-            </div>
-        </div>
-    </section>
-</div>
+    {{ chart_data_json|json_script:"chart-data" }}
 
-{{ chart_data_json|json_script:"chart-data" }}
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const rawData = JSON.parse(document.getElementById('chart-data').textContent);
 
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        const rawData = JSON.parse(document.getElementById('chart-data').textContent);
-        
-        if (rawData.length > 0) {
-            const labels = rawData.map(item => item.date);
-            const closePrices = rawData.map(item => item.close);
-            const kosdaqIndices = rawData.map(item => item.kosdaq);
+            if (rawData.length > 0) {
+                const labels = rawData.map(item => item.date);
+                const closePrices = rawData.map(item => item.close);
+                const kosdaqIndices = rawData.map(item => item.kosdaq);
 
-            const ctx = document.getElementById('performanceChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: '종가 (원)',
-                            data: closePrices,
-                            borderColor: '#3498db',
-                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                            yAxisID: 'y',
-                            tension: 0.3,
-                            borderWidth: 2,
-                            pointRadius: 1,
-                        },
-                        {
-                            label: 'KOSDAQ 지수',
-                            data: kosdaqIndices,
-                            borderColor: '#e74c3c',
-                            backgroundColor: 'transparent',
-                            yAxisID: 'y1',
-                            tension: 0.3,
-                            borderWidth: 2,
-                            pointRadius: 1,
-                            borderDash: [5, 5] // KOSDAQ은 점선으로 구분
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
+                const ctx = document.getElementById('performanceChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '종가 (원)',
+                                data: closePrices,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                yAxisID: 'y',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 1,
+                            },
+                            {
+                                label: 'KOSDAQ 지수',
+                                data: kosdaqIndices,
+                                borderColor: '#e74c3c',
+                                backgroundColor: 'transparent',
+                                yAxisID: 'y1',
+                                tension: 0.3,
+                                borderWidth: 2,
+                                pointRadius: 1,
+                                borderDash: [5, 5] // KOSDAQ은 점선으로 구분
+                            }
+                        ]
                     },
-                    scales: {
-                        x: {
-                            grid: { display: false }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
                         },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: { display: true, text: '종가 (원)' },
-                            grid: { color: 'rgba(0,0,0,0.05)' }
+                        scales: {
+                            x: {
+                                grid: { 
+                                    display: true,
+                                    drawOnChartArea: false,
+                                    drawTicks: true,
+                                    tickLength: 8,
+                                    tickColor: '#888'
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45,
+                                    autoSkip: true,
+                                    maxTicksLimit: 6, // 60 trading days / 10 days = 6 ticks
+                                    color: '#555',
+                                    font: { size: 11 }
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: '종가 (원)' },
+                                grid: { color: 'rgba(0,0,0,0.05)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: 'KOSDAQ' },
+                                grid: { drawOnChartArea: false }, // 오른쪽 Y축 격자는 숨김
+                            }
                         },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: { display: true, text: 'KOSDAQ' },
-                            grid: { drawOnChartArea: false }, // 오른쪽 Y축 격자는 숨김
-                        }
-                    },
-                    plugins: {
-                        legend: { position: 'top' },
-                        tooltip: {
-                            backgroundColor: 'rgba(255,255,255,0.9)',
-                            titleColor: '#000',
-                            bodyColor: '#333',
-                            borderColor: '#ddd',
-                            borderWidth: 1,
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: {
+                                backgroundColor: 'rgba(255,255,255,0.9)',
+                                titleColor: '#000',
+                                bodyColor: '#333',
+                                borderColor: '#ddd',
+                                borderWidth: 1,
+                            }
                         }
                     }
-                }
-            });
-        }
-    });
-</script>
+                });
+            }
+        });
+    </script>
 
 </body>
+
 </html>

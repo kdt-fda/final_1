@@ -7,6 +7,9 @@ import sys
 import requests
 import datetime
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed # 병렬처리용
+
+pd.set_option('future.no_silent_downcasting', True) # replace 타입 변경 관련 경고 무시
 
 # 루트 경로를 추가하여 common 패키지를 인식하게 함
 temp_base = Path(__file__).resolve().parents[1] # parents[0]은 data_pipeline 폴더를 의미함
@@ -50,6 +53,7 @@ def create_company_stock(conn):
                     fluc_rt DECIMAL(9,4),
                     dps DECIMAL(18,4),
                     eps DECIMAL(18,4),
+                    eps_1yearago DECIMAL(18,4),
                     dividend_yield DECIMAL(6,3),
                     per DECIMAL(10,4),
                     pbr DECIMAL(10,4),
@@ -162,7 +166,7 @@ def get_existing_records(conn, start_date_str: str, end_date_str: str) -> set:
     return existing
 
 # 여러 날짜에 대해 한 종목의 피쳐들을 한 번에 파싱하는 함수
-def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, end_dt, finance_map: dict) -> pd.DataFrame:
+def assemble_company_stock_rows(stock_code: str, missing_dates: list, finance_map: dict) -> pd.DataFrame:
     if not missing_dates:
         return pd.DataFrame()
     
@@ -174,17 +178,20 @@ def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, 
     fetch_end_ymd = max_missing_dt.strftime("%Y%m%d")
     
     # 누적 이평선 및 52주 최고/최저가를 위해 OHLCV만 누락일 기준 1년 전까지 포괄
-    start_history_ymd = (min_missing_dt - pd.Timedelta(days=365)).strftime("%Y%m%d")
+    # 1년에 영업일이 252일 정도라고 가정했을 때, -365만 했을 때 혹시나 252일이 안되는 경우를 고려한 넉넉한 기간 설정
+    start_history_ymd = (min_missing_dt - pd.Timedelta(days=400)).strftime("%Y%m%d")
     
     # 90일 고정이 아닌, 실제 필요한 최소 구간(fetch_start_ymd ~ fetch_end_ymd)만 API 호출
     df_ohlcv = stock.get_market_ohlcv_by_date(start_history_ymd, fetch_end_ymd, stock_code, adjusted=False) # 시가, 고가, 저가, 종가, 거래량, 거래대금, 등략률 있음(날짜 인덱스)
     df_cap = stock.get_market_cap_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # 시가총액, 거래량, 거래대금, 상장주식수 있음(날짜 인덱스)
-    df_fund = stock.get_market_fundamental_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # BPS, PER, PBR, EPS, DIV, DPS 있음 (날짜 인덱스)
+    df_fund = stock.get_market_fundamental_by_date(start_history_ymd, fetch_end_ymd, stock_code) # BPS, PER, PBR, EPS, DIV, DPS 있음 (날짜 인덱스)
     df_fore = stock.get_exhaustion_rates_of_foreign_investment_by_date(fetch_start_ymd, fetch_end_ymd, stock_code) # 상장주식수, 외국인보유수량, 외국인 지분율, 외국인한도수량, 외국인한도소진률 있음 (날짜 인덱스)
 
     results = [] # 각 날짜별로 정리된 데이터를 담기 위한 빈 리스트
     for m_date_str in missing_dates: # db에 빠져 있는 날짜들 하나씩 가져오기
         m_dt = pd.to_datetime(m_date_str)
+        
+        exact_1yr_ago_dt = None # 1년 전 영업일 날짜 저장용
         
         # OHLCV 데이터 구성
         if df_ohlcv is not None and not df_ohlcv.empty and m_dt in df_ohlcv.index: # OHLCV 데이터가 존재하고, 현재 처리하려는 날짜가 데이터에 있는지 확인
@@ -192,6 +199,9 @@ def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, 
             row_day = curr_ohlcv.iloc[-1] # 데이터 중 가장 마지막 줄 가져옴
             df_60 = curr_ohlcv.tail(60) # 최근 60거래일 데이터를 추출
             df_252 = curr_ohlcv.tail(252) # 252가 약 1년 영업일 (이거는 한번에 455일치를 조회하기 때문에 대략적인 52주 데이터를 개장일을 252로 잡아서 가져온 것)
+            
+            if len(df_252) == 252:
+                exact_1yr_ago_dt = df_252.index[0]
             
             prev_close = safe_to_int(curr_ohlcv.iloc[-2].get("종가")) if len(curr_ohlcv) >= 2 else None # 전날 종가 추출
             close_price = safe_to_int(row_day.get("종가")) # 오늘 종가
@@ -229,35 +239,41 @@ def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, 
             }
 
         # 펀더멘털 피쳐 구성
-        fund_feats = {"dps": None, "eps": None, "dividend_yield": None, "per": None, "pbr": None}
-        if df_fund is not None and not df_fund.empty and m_dt in df_fund.index:
-            fund_row = df_fund.loc[m_dt]
+        fund_feats = {"dps": None, "eps": None, "eps_1yearago": None, "dividend_yield": None, "per": None, "pbr": None}
+        if df_fund is not None and not df_fund.empty:
+            if m_dt in df_fund.index:
+                fund_row = df_fund.loc[m_dt]
+                
+                raw_per = safe_to_float(fund_row.get("PER"), 4)
+                raw_pbr = safe_to_float(fund_row.get("PBR"), 4)
+                mktcap = cap_feats.get("mktcap")
+                finance_info = finance_map.get(stock_code, {})
             
-            raw_per = safe_to_float(fund_row.get("PER"), 4)
-            raw_pbr = safe_to_float(fund_row.get("PBR"), 4)
-            
-            mktcap = cap_feats.get("mktcap")
-            finance_info = finance_map.get(stock_code, {})
-            
-            # PER 대체 계산
-            if raw_per in (None, 0, 0.0) and mktcap is not None:
-                net_income = finance_info.get("net_income")
-                if net_income is not None and float(net_income) != 0: 
-                    raw_per = safe_to_float(mktcap / float(net_income), 4)
+                # PER 대체 계산
+                if raw_per in (None, 0, 0.0) and mktcap is not None:
+                    net_income = finance_info.get("net_income")
+                    if net_income is not None and float(net_income) != 0: 
+                        raw_per = safe_to_float(mktcap / float(net_income), 4)
 
-            # PBR 대체 계산
-            if raw_pbr in (None, 0, 0.0) and mktcap is not None:
-                equity = finance_info.get("equity")
-                if equity is not None and float(equity) != 0: 
-                    raw_pbr = safe_to_float(mktcap / float(equity), 4)
+                # PBR 대체 계산
+                if raw_pbr in (None, 0, 0.0) and mktcap is not None:
+                    equity = finance_info.get("equity")
+                    if equity is not None and float(equity) != 0: 
+                        raw_pbr = safe_to_float(mktcap / float(equity), 4)
             
-            fund_feats = {
-                "dps": safe_to_float(fund_row.get("DPS"), 4),
-                "eps": safe_to_float(fund_row.get("EPS"), 4),
-                "dividend_yield": safe_to_float(fund_row.get("DIV"), 3),
-                "per": raw_per,
-                "pbr": raw_pbr
-            }
+                fund_feats = {
+                    "dps": safe_to_float(fund_row.get("DPS"), 4),
+                    "eps": safe_to_float(fund_row.get("EPS"), 4),
+                    "dividend_yield": safe_to_float(fund_row.get("DIV"), 3),
+                    "per": raw_per,
+                    "pbr": raw_pbr
+                }
+            
+            if exact_1yr_ago_dt is not None:
+                past_fund = df_fund.loc[:exact_1yr_ago_dt] 
+                if not past_fund.empty:
+                    past_eps = past_fund.iloc[-1].get("EPS")
+                    fund_feats["eps_1yearago"] = safe_to_float(past_eps, 4)
 
         # 외국인 지분율 피쳐 구성
         fore_feats = {"foreign_ratio": None}
@@ -358,6 +374,30 @@ def get_latest_kosdaq_trading_date(lookback_days: int = 10) -> str:
     idx.index = pd.to_datetime(idx.index)
     return idx.index.max().strftime("%Y-%m-%d")
 
+def fetch_single_stock_data(stock_code, trading_days, existing_set, finance_map): # 병렬 처리용
+    missing_dates = [d for d in trading_days if (stock_code, d) not in existing_set] # 거래일만 있는 리스트에서 주식코드, 거래일 쌍이 이미 db에 있는지 확인해서 없는 날짜만 가져옴
+    
+    if not missing_dates:
+        return None, None  # 이미 다 있으면 스킵
+
+    max_retries = 3 # 최대 재시도 횟수
+    for attempt in range(max_retries):
+        try:
+            # 기본 0.5초 대기 (재시도할 때는 1초, 1.5초로 늘어남)
+            time.sleep(0.5 * (attempt + 1))
+            
+            # 기존에 만드신 데이터 조립 함수 호출
+            df_multi = assemble_company_stock_rows(stock_code, missing_dates, finance_map)
+            
+            if df_multi is not None and not df_multi.empty:
+                return df_multi, None
+            
+        except Exception as e:
+            if attempt == max_retries - 1:
+                return None, (stock_code, str(e))
+    
+    return None, (stock_code, "데이터 수집 실패 (재시도 초과)")
+
 # 메인 데이터 구축 함수 (이전 90일, 건너뛰기 처리 반영)
 def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
     end_dt = pd.to_datetime(reference_date)
@@ -387,47 +427,32 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
     rows = [] # 성공한 결과물들을 모아서 최종 결과표(result)를 만들기 위한 용도 / 성공적으로 수집된 데이터프레임(df_multi)들을 쌓아두는 용도
     fail_list = [] # (종목코드, 에러 메시지) 형태의 튜플로 저장
     total_base = len(base) # 총 수집해야 하는 종목 개수
+    
+    print(f"병렬 수집 시작 (max_workers=4, 총 종목: {total_base})")
+    
+    with ThreadPoolExecutor(max_workers=4) as executor: # 여기서 max_workers 수정 적절하게 하면 됨
+        # 각 종목별 수집 작업을 스케줄링
+        future_to_stock = {
+            executor.submit(fetch_single_stock_data, sc, trading_days, existing_set, finance_map): sc 
+            for sc in base["stock_code"]
+        }
 
-    for i, stock_code in enumerate(base["stock_code"], start=1): # 0 인덱스를 1로 표기
-        if i % 100 == 0: # 진행상황 확인용
-            print(f"... processing {i}/{total_base}")
-        
-        # 이미 DB에 존재하는 일자는 제외하고, 적재해야 할 누락된 일자(missing_dates)만 계산
-        missing_dates = [d for d in trading_days if (stock_code, d) not in existing_set] # 거래일만 있는 리스트에서 주식코드, 거래일 쌍이 이미 db에 있는지 확인해서 없는 날짜만 가져옴
-        
-        if not missing_dates:
-            continue # 모두 DB에 존재할 경우 깔끔히 건너뛰기
-        
-        max_retries = 3 # 최대 재시도 횟수
-        df_multi = None
-        
-        for attempt in range(max_retries):
+        # 작업이 완료되는 순서대로 결과 회수
+        for i, future in enumerate(as_completed(future_to_stock), start=1): # 0 인덱스를 1로 표기
             try:
-                # 기본 0.5초 대기 (재시도할 때는 1초, 1.5초로 늘어남)
-                time.sleep(0.5 * (attempt + 1))
-                df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt, finance_map)
+                df_result, error_info = future.result()
                 
-                if df_multi is not None and not df_multi.empty: # 빈프레임 아니면 for문 끝내기
-                    break 
-                else:
-                    if attempt < max_retries - 1:
-                        print(f"[{stock_code}] 데이터 누락 감지. 재시도 중... ({attempt+1}/{max_retries})")
-                        
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    print(f"[{stock_code}] 통신 에러({e}). 재시도 중... ({attempt+1}/{max_retries})")
-                else:
-                    fail_list.append((stock_code, str(e))) # 최종 실패하면 실패 리스트에 추가
-        
-        if df_multi is not None and not df_multi.empty: # 빈프레임이 아니면 추가
-            rows.append(df_multi)
-        else:
-            # 3번 다 실패했거나 빈 데이터만 받았다면 최종 실패 처리
-            if not any(f[0] == stock_code for f in fail_list): # 중복 추가 방지
-                fail_list.append((stock_code, "empty result after retries"))
+                if df_result is not None:
+                    rows.append(df_result)
+                if error_info:
+                    fail_list.append(error_info)
+                    
+            except Exception as exc:
+                sc = future_to_stock[future]
+                fail_list.append((sc, f"Critical Error: {exc}"))
 
-    print(f"성공 건수: {sum(len(r) for r in rows if r is not None)}")
-    print(f"실패/누락 종목 수: {len(fail_list)}")
+            if i % 100 == 0: # 진행상황 확인용
+                print(f"  > 진행 상황: {i}/{total_base} (성공: {len(rows)}, 실패: {len(fail_list)})")
     
     if fail_list: # 실패 내역 파일 저장
         now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -455,11 +480,11 @@ def upload_to_company_stock(conn, df: pd.DataFrame, chunk_size: int = 1000):
             stock_code, reference_date, open_price, prev_close_price, close_price,
             price_change, high_price, low_price, wk52_high, wk52_low, book_value,
             mktcap, shares_btj, trdvol, acc_trdvol, acc_trdval, bas_trdval,
-            foreign_ratio, fluc_rt, dps, eps, dividend_yield, per, pbr
+            foreign_ratio, fluc_rt, dps, eps, eps_1yearago, dividend_yield, per, pbr
         ) VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s
+            %s, %s, %s, %s, %s
         )
         ON DUPLICATE KEY UPDATE
             open_price = VALUES(open_price), prev_close_price = VALUES(prev_close_price),
@@ -471,8 +496,8 @@ def upload_to_company_stock(conn, df: pd.DataFrame, chunk_size: int = 1000):
             trdvol = VALUES(trdvol), acc_trdvol = VALUES(acc_trdvol),
             acc_trdval = VALUES(acc_trdval), bas_trdval = VALUES(bas_trdval),
             foreign_ratio = VALUES(foreign_ratio), fluc_rt = VALUES(fluc_rt),
-            dps = VALUES(dps), eps = VALUES(eps), dividend_yield = VALUES(dividend_yield),
-            per = VALUES(per), pbr = VALUES(pbr)
+            dps = VALUES(dps), eps = VALUES(eps), eps_1yearago = VALUES(eps_1yearago),
+            dividend_yield = VALUES(dividend_yield), per = VALUES(per), pbr = VALUES(pbr)
     """ # 일단 이 duplicate key 부분은 처음부터 다 거르고 수행하는거라 없어도 될거 같은데 보험용으로 킵
 
     df = df.copy()
@@ -485,7 +510,7 @@ def upload_to_company_stock(conn, df: pd.DataFrame, chunk_size: int = 1000):
         "wk52_high", "wk52_low", "book_value", "mktcap",
         "shares_btj",  "trdvol", "acc_trdvol",
         "acc_trdval", "bas_trdval", "foreign_ratio", "fluc_rt",
-        "dps", "eps", "dividend_yield", "per", "pbr",
+        "dps", "eps", "eps_1yearago", "dividend_yield", "per", "pbr",
     ] # 열 정렬
 
     for col in ordered_cols: # 혹시나 모를 열 없을 때를 대비한 안전장치

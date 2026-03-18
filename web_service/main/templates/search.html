@@ -70,7 +70,7 @@
         <ul class="results-list"> <!-- ul이 글머리 만드는 태그, 반드시 li랑 같이 사용해야됨 -->
             {% for company in results %}
                 <li class="result-item"> <!-- li 태그로 리스트 형태로 보여주는 것 -->
-                    <a href="{% url 'ai_page' company.stock_code %}" class="result-link"> <!-- 링크 연결 부분 -->
+                    <a href="{% url 'overview' company.stock_code %}" class="result-link"> <!-- 링크 연결 부분 -->
                         <div class="corp-info">
                             <span class="corp-name">{{ company.corp_name }}</span> <!-- 회사 이름 -->
                             <span class="stock-code">{{ company.stock_code }}</span> <!-- 종목코드 -->
