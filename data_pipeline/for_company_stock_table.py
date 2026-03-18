@@ -162,7 +162,7 @@ def get_existing_records(conn, start_date_str: str, end_date_str: str) -> set:
     return existing
 
 # 여러 날짜에 대해 한 종목의 피쳐들을 한 번에 파싱하는 함수
-def assemble_company_stock_rows(stock_code: str, missing_dates: list, start_dt, end_dt, finance_map: dict) -> pd.DataFrame:
+def assemble_company_stock_rows(stock_code: str, missing_dates: list, finance_map: dict) -> pd.DataFrame:
     if not missing_dates:
         return pd.DataFrame()
     
@@ -405,7 +405,7 @@ def build_company_stock_base(conn, reference_date: str) -> pd.DataFrame:
             try:
                 # 기본 0.5초 대기 (재시도할 때는 1초, 1.5초로 늘어남)
                 time.sleep(0.5 * (attempt + 1))
-                df_multi = assemble_company_stock_rows(stock_code, missing_dates, start_dt, end_dt, finance_map)
+                df_multi = assemble_company_stock_rows(stock_code, missing_dates, finance_map)
                 
                 if df_multi is not None and not df_multi.empty: # 빈프레임 아니면 for문 끝내기
                     break 
