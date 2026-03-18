@@ -126,7 +126,7 @@ def search(request):
     return render(request, 'search.html', {'results': results, 'query': query})
 
 def ai_page(request, stock_code):
-    company = get_object_or_404(Basic, stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
+    company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
     report = Report.objects.filter(stock_code=stock_code).first() # 해당 종목의 report 테이블을 가져옴
 
     # 데이터 유효성 검사 (None, 'None', '[]' 등 체크)
@@ -155,62 +155,55 @@ def ai_page(request, stock_code):
     return render(request, 'ai_page.html', context)
 
 def overview(request, stock_code=None):
-    if not stock_code:
-        # URL에 stock_code가 없을 경우 첫 번째 활성화된 기업으로 리다이렉트
-        company = Basic.objects.filter(is_active=True).first()
-        if company:
-            return redirect('overview', stock_code=company.stock_code)
-        return render(request, 'overview.html')
-
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
 
-    # 1. COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
+    # COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
     latest_overlap = CompanyStock.objects.filter(
         stock_code=stock_code,
         reference_date__in=MarketIndex.objects.values('date')
     ).order_by('-reference_date').first()
 
-    latest_date = latest_overlap.reference_date if latest_overlap else date.today()
+    latest_date = latest_overlap.reference_date if latest_overlap else date.today() # 데이터 없으면 오늘 날짜로 지정
 
-    # 2. 기본 정보 데이터 페치
-    stock_data = CompanyStock.objects.filter(stock_code=stock_code, reference_date=latest_date).first()
-    index_data = MarketIndex.objects.filter(date=latest_date).first()
-    finance_data = CompanyFinance.objects.filter(stock_code=stock_code).order_by('-biz_year').first()
+    # 기본 정보 데이터 페치
+    stock_data = CompanyStock.objects.filter(stock_code=stock_code, reference_date=latest_date).first() # 제일 최신 날짜 기준으로 COMAPANY_STOCK 가져옴
+    index_data = MarketIndex.objects.filter(date=latest_date).first() # 제일 최신 날짜 기준으로 MARKET_INDEX 가져옴
+    finance_data = CompanyFinance.objects.filter(stock_code=stock_code).order_by('-biz_year').first() # 제일 최신 biz year 기준으로 COMPANY_FINANCE 가져옴
 
     if stock_data and stock_data.mktcap:
         try:
-            stock_data.mktcap = int(float(stock_data.mktcap) / 1000000)
+            stock_data.mktcap = int(float(stock_data.mktcap) / 1000000) # 시가총액 백만원 단위로 표기하기 위함
         except (ValueError, TypeError):
             pass
 
-    if finance_data and finance_data.maj_shareholders:
+    if finance_data and finance_data.maj_shareholders: # 주요주주 부분
         import re
         maj_text = finance_data.maj_shareholders
-        if '계' in maj_text:
+        if '계' in maj_text: # 텍스트 안에 '계'가 있으면 그 이전 내용만 남김
             maj_text = maj_text.split('계')[0]
-        maj_lines = [line.strip() for line in maj_text.split('|') if line.strip()]
+        maj_lines = [line.strip() for line in maj_text.split('|') if line.strip()] # '|'를 기준으로 텍스트 나눠서 리스트로 만들기
         
         parsed_lines = []
         for line in maj_lines:
-            match = re.search(r'([\d\.]+)\s*%', line)
+            match = re.search(r'([\d\.]+)\s*%', line) # 정규표현식으로 지분율 %를 숫자로 추출
             pct = float(match.group(1)) if match else 0.0
             parsed_lines.append((pct, line))
             
-        parsed_lines.sort(key=lambda x: x[0], reverse=True)
-        top_3_lines = [item[1] for item in parsed_lines[:3]]
+        parsed_lines.sort(key=lambda x: x[0], reverse=True) # 지분율 기준으로 내림차순 정렬
+        top_3_lines = [item[1] for item in parsed_lines[:3]] # 상위 최대 3개 추출
         
-        finance_data.maj_shareholders = '\n'.join(top_3_lines)
+        finance_data.maj_shareholders = '\n'.join(top_3_lines) # 선택된 상위 3명을 줄바꿈 문자로 합쳐 다시 저장
 
-    # 3. 차트용 데이터 (최신 교집합 날짜 기준 역순 60일치 가져와서 정방향 정렬)
+    # 차트용 데이터 (최신 교집합 날짜 기준 역순 60일치 가져와서 정방향 정렬, 약 3달치 데이터)
     past_60_stocks = list(CompanyStock.objects.filter(
         stock_code=stock_code,
         reference_date__lte=latest_date
     ).order_by('-reference_date')[:60])
     past_60_stocks.reverse() # 과거 -> 최신 순으로 정렬
 
-    chart_dates = [s.reference_date for s in past_60_stocks]
-    market_indices = MarketIndex.objects.filter(date__in=chart_dates)
-    market_index_map = {m.date: m.kosdaq for m in market_indices}
+    chart_dates = [s.reference_date for s in past_60_stocks] # 날짜 리스트화
+    market_indices = MarketIndex.objects.filter(date__in=chart_dates) # 해당 날짜의 MARKET_INDEX 테이블 가져옴
+    market_index_map = {m.date: m.kosdaq for m in market_indices} # 날짜 : kosdaq 딕셔너리 매칭
 
     chart_data = []
     for s in past_60_stocks:
@@ -218,7 +211,7 @@ def overview(request, stock_code=None):
             'date': s.reference_date.strftime('%Y-%m-%d'),
             'close': float(s.close_price) if s.close_price else None,
             'kosdaq': float(market_index_map.get(s.reference_date, 0)) if market_index_map.get(s.reference_date) else None
-        })
+        }) # chart_data 리스트에 딕셔너리 형태로 날짜, 종가, 코스닥 지수 넣음
 
     context = {
         'company': company,
