@@ -451,6 +451,16 @@ def collect_single_ticker(
         base["foreign_netbuy_value"] = np.nan
         base["inst_netbuy_value"] = np.nan
 
+    zero_trading_mask = pd.to_numeric(base["trading_value"], errors="coerce").eq(0)
+    base.loc[
+        zero_trading_mask & base["foreign_netbuy_value"].isna(),
+        "foreign_netbuy_value",
+    ] = 0.0
+    base.loc[
+        zero_trading_mask & base["inst_netbuy_value"].isna(),
+        "inst_netbuy_value",
+    ] = 0.0
+
     t_fund = _stage_start("Fundamental")
     fundamental = safe_pykrx_call(
         stock.get_market_fundamental_by_date, from_dt, to_dt, stock_code
@@ -473,8 +483,8 @@ def collect_single_ticker(
             else pd.Series(np.nan, index=base.index)
         )
 
-        base["per"] = per_series.mask(per_series.eq(0))
-        base["pbr"] = pbr_series.mask(pbr_series.eq(0))
+        base["per"] = per_series
+        base["pbr"] = pbr_series
     else:
         base["per"] = np.nan
         base["pbr"] = np.nan
