@@ -53,6 +53,28 @@
             border-left: 6px solid #3498db; padding-left: 15px; /* 제목 앞에 파란색 세로 실선 줘서 포인트 주기 */
         }
 
+        /* 카드 헤더(제목+출처) 좌우 정렬을 위한 스타일, 회사 개요 부분만 이거 사용 */
+        .card-header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end; /* 글자 아래 기준선 맞추기 */
+            margin-bottom: 12px;
+        }
+        .card-source-text {
+            font-size: 0.85rem;
+            color: #888;
+            font-weight: normal;
+        }
+        .hidden-link { /* 링크 티 안나게 해주는 부분 */
+            color: inherit; /* 부모 색상 그대로 사용 */
+            text-decoration: none; /* 밑줄 제거 */
+            cursor: pointer; /* 마우스 올렸을 때 손가락 모양으로 변경 (링크임을 알림) */
+        }
+        .hidden-link:hover, .hidden-link:visited, .hidden-link:active { /* 마우스를 올렸을 때도 아무런 변화가 없도록 설정 */
+            color: inherit;
+            text-decoration: none;
+        }
+
         .info-list { /* 회사 개요 스타일 부분 */
             list-style: none; padding: 0; display: grid; 
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; /* 최소 너비 확보 가능하게끔 함 */
@@ -116,9 +138,21 @@
         <h1>{{ company.corp_name }}({{ company.stock_code }})</h1>
         <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div> <!-- IND_BASIC으로 넘어가서 ind_name 가져옴 -->
     </section>
-
+    
     <section class="section-block">
-        <h2 class="card-title">회사 개요</h2> <!-- 회사 개요 부분 -->
+        <div class="card-header-flex">
+            <h2 class="card-title">회사 개요</h2> <!-- 회사 개요 부분 -->
+            <span class="card-source-text">
+                <a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo={{ report.report_num }}" target="_blank" rel="noopener noreferrer" class="hidden-link">
+                    {% if report.report_name %}
+                        자료: 금융감독원 전자공시 - {{ report.report_name }}
+                    {% else %}
+                        자료: 금융감독원 전자공시 사업보고서(접수일자 : {{ report.report_date|slice:":4" }}.{{ report.report_date|slice:"4:6" }}.{{ report.report_date|slice:"6:" }})
+                    {% endif %}
+                </a>
+            </span>
+        </div>
+    
         <div class="card">
             <ul class="info-list">
                 <li>• 회사명 : {{ company.corp_name }}</li>
