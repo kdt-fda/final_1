@@ -150,6 +150,7 @@ def create_report(conn):
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     stock_code VARCHAR(10),
                     report_num VARCHAR(50) UNIQUE,
+                    report_name VARCHAR(255),
                     report_date VARCHAR(20),
                     history_origin MEDIUMTEXT,
                     outline_origin MEDIUMTEXT,
@@ -268,15 +269,15 @@ def upload_to_report_origin():
 
                         # 삽입 및 업데이트
                         sql = """
-                            INSERT INTO REPORT (stock_code, report_num, report_date, 
+                            INSERT INTO REPORT (stock_code, report_num, report_name, report_date, 
                                             history_origin, outline_origin, product_origin, sales_origin)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             ON DUPLICATE KEY UPDATE id = id;
                         """ # 나중에 report_num 중복시 넘어가는 로직 지우게 될 경우 안전장치(동일한 report_num이 들어왔을 떄, unique 제약 조건 에러 막기 위한 안전장치)
 
                         # 실행할 파라미터 튜플 생성
                         val = (
-                            stock_code, report_num, report_date, 
+                            stock_code, report_num, report_name, report_date, 
                             history, outline, product, sales
                         )
                         

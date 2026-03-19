@@ -237,6 +237,7 @@ class MarketIndex(models.Model):
 class Report(models.Model):
     stock_code = models.ForeignKey(Basic, models.DO_NOTHING, db_column='stock_code', blank=True, null=True)
     report_num = models.CharField(unique=True, max_length=50, blank=True, null=True)
+    report_name = models.CharField(max_length=255, blank=True, null=True)
     report_date = models.CharField(max_length=20, blank=True, null=True)
     history_origin = models.TextField(blank=True, null=True)
     outline_origin = models.TextField(blank=True, null=True)
