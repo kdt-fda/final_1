@@ -59,7 +59,7 @@ FINANCIAL_METRIC_DESCRIPTIONS = {
 DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 안정성이 높은 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
 
 def home(request):
-    count = Report.objects.count()
+    count = Basic.objects.filter(is_active=True).count() # BASIC의 is_active한 개수로 수정함
     top_stocks = []
 
     # 활성화된 기업의 stock_code만 리스트로 쫙 뽑아옴
@@ -135,11 +135,26 @@ def search(request):
 
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
-    report = Report.objects.filter(stock_code=stock_code).first() # 해당 종목의 report 테이블을 가져옴
 
     # 데이터 유효성 검사 (None, 'None', '[]' 등 체크)
     def is_invalid(value):
         return value in [None, 'None', '[]', 'NULL', [], 'null', '', 'NULL']
+    
+    # 최신 보고서 날짜순(-report_date)으로 정렬하여 해당 종목의 모든 리포트를 가져옴
+    reports = Report.objects.filter(stock_code=stock_code).order_by('-report_date')
+    
+    report = None # 다 채워진 보고서가 없으면 None이 되는 것
+    for r in reports:
+        # 5개 항목 중 하나라도 비어있으면(is_invalid가 True면) 통과하고 다음 예전 데이터를 확인
+        if (
+            not is_invalid(r.history_ai) and
+            not is_invalid(r.outline_ai) and
+            not is_invalid(r.product_ai) and
+            not is_invalid(r.product_ratio_ai) and
+            not is_invalid(r.sales_ai)
+        ):
+            report = r
+            break  # 5개가 모두 다 채워진 최신 데이터를 찾으면 반복문 종료
 
     # 주요 연혁 및 제품 비중 노출 여부 판단
     show_history = report and not is_invalid(report.history_ai) # report가 있으면서 history_ai랑 product_ratio_ai는 None이 아니어야 홈페이지에 띄우기 위한 용도
