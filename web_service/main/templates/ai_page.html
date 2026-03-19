@@ -134,7 +134,7 @@
         </div>
     </section>
 
-    {% if report %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블에 내용이 있어야 보여줌 -->
+    {% if report %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블에 내용이 있는 경우 -->
     <section class="section-block">
         <h2 class="card-title">사업 개요</h2> <!-- 사업 개요 부분 -->
         <div class="card">
@@ -153,6 +153,13 @@
         <h2 class="card-title">매출 및 수주 상황</h2> <!-- 매출 및 수주 상황 부분 -->
         <div class="card">
             <div class="content-text">{{ report.sales_ai }}</div>
+        </div>
+    </section>
+    {% else %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블의 제일 최신 데이터가 적재중이고, 기존 데이터도 없는 경우 -->
+    <section class="section-block">
+        <div class="card" style="text-align: center; padding: 60px 20px;">
+            <h2 style="color: #555; font-size: 1.5rem; margin-bottom: 15px;">보고서 준비중입니다</h2>
+            <p style="color: #888; font-size: 1.15rem;">현재 최신 분석 데이터를 수집 및 정리하고 있습니다.<br>조금만 기다려주세요!</p>
         </div>
     </section>
     {% endif %}
