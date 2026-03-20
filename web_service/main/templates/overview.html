@@ -139,10 +139,14 @@
 
                     <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
                         <span style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 10px;">
-                            현재주가 <span style="font-size: 2rem; color: #999; font-weight: 400;">(2026.02.03)</span>
+                            현재주가 <span style="font-size: 2rem; color: #999; font-weight: 400;">({{ latest_price_date|date:"Y.m.d"|default:"데이터 없음" }})</span>
                         </span>
                         <span style="font-size: 2.5rem; font-weight: 800; color: #111; line-height: 1;">
-                            21,100<span style="font-size: 2.5rem; font-weight: 600; color: #767676; margin-left: 6px;">원</span>
+                            {% if stock_data and stock_data.close_price != None %}
+                            {{ stock_data.close_price|intcomma }}<span style="font-size: 2.5rem; font-weight: 600; color: #767676; margin-left: 6px;">원</span>
+                            {% else %}
+                            -
+                            {% endif %}
                         </span>
                     </div>
 
@@ -165,7 +169,7 @@
                         <div class="info-row"><span class="info-label">평균거래량(60일)</span> <span class="info-value">{{ stock_data.acc_trdvol|default:"-"|intcomma }} 주</span></div>
                         <div class="info-row"><span class="info-label">평균거래대금(60일)</span> <span class="info-value">{{ stock_data.acc_trdval|default:"-"|intcomma }} 원</span></div>
                         <div class="info-row"><span class="info-label">외국인지분</span> <span class="info-value">{{ stock_data.foreign_ratio|default:"-" }} %</span></div>
-                        <div class="info-row"><span class="info-label">자본금</span> <span class="info-value">{{ finance_data.capital_stock|default:"-"|intcomma }} 원</span></div>
+                        <div class="info-row"><span class="info-label">자본금</span> <span class="info-value">{{ finance_data.capital_stock|default:"-"|intcomma }} {{ price_unit_label }}</span></div>
                         <div class="info-row"><span class="info-label">KOSPI</span> <span class="info-value">{{ index_data.kospi|default:"-"|floatformat:2 }}</span></div>
                         <div class="info-row"><span class="info-label">KOSDAQ</span> <span class="info-value">{{ index_data.kosdaq|default:"-"|floatformat:2 }}</span></div>
 

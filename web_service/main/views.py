@@ -1,9 +1,13 @@
 ﻿from django.shortcuts import render, get_object_or_404, redirect
 from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import csv
 import math
 import threading
 import statistics
 import json
+from functools import lru_cache
+from pathlib import Path
 import pandas as pd
 from django.db.models import OuterRef, Subquery
 from django.db.utils import OperationalError, ProgrammingError
@@ -57,6 +61,64 @@ FINANCIAL_METRIC_DESCRIPTIONS = {
     'EPS 성장률': '주당순이익(EPS)이 얼마나 증가했는지를 보여주는 지표 (1년 전 대비)',
 }
 DEBT_RATIO_FOOTNOTE = '※ 부채비율은 낮을수록 안정성이 높은 지표로, 해당 기준에 따라 순위가 산정되었습니다.'
+
+
+def normalize_currency_code(currency):
+    if currency is None:
+        return None
+
+    currency_text = str(currency).strip().upper()
+    if not currency_text or currency_text in {'NONE', 'NULL', '-'}:
+        return None
+    return currency_text
+
+
+def resolve_company_currency(*finance_sources):
+    for source in finance_sources:
+        if not source:
+            continue
+
+        currency = source.get('currency') if isinstance(source, dict) else getattr(source, 'currency', None)
+        normalized_currency = normalize_currency_code(currency)
+        if normalized_currency:
+            return normalized_currency
+
+    return 'KRW'
+
+
+def get_price_unit_label(currency_code):
+    return '원' if normalize_currency_code(currency_code) == 'KRW' else normalize_currency_code(currency_code) or '원'
+
+
+@lru_cache(maxsize=1)
+def get_ecos_io_name_map():
+    io_name_map = {}
+    file_path = Path(__file__).resolve().parents[2] / 'data' / 'io_rawdata.csv'
+
+    if not file_path.exists():
+        return io_name_map
+
+    try:
+        with file_path.open(encoding='utf-8-sig', newline='') as csv_file:
+            reader = csv.reader(csv_file)
+            next(reader, None)  # header
+            for row in reader:
+                if len(row) < 5:
+                    continue
+                code_name_pairs = [
+                    (row[1], row[2]),
+                    (row[3], row[4]),
+                ]
+                for raw_code, raw_name in code_name_pairs:
+                    code = str(raw_code).strip() if raw_code is not None else ''
+                    name = str(raw_name).strip() if raw_name is not None else ''
+                    if not code or not name:
+                        continue
+                    io_name_map.setdefault(code, name)
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return {}
+
+    return io_name_map
 
 def home(request):
     count = Basic.objects.filter(is_active=True).count() # BASIC의 is_active한 개수로 수정함
@@ -133,6 +195,53 @@ def search(request):
     # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줌
     return render(request, 'search.html', {'results': results, 'query': query})
 
+
+def normalize_product_ratio_data(raw_ratio_data):
+    if not isinstance(raw_ratio_data, list):
+        return []
+
+    normalized_ratio_data = []
+    total_ratio = Decimal('0')
+    other_item = None
+
+    for item in raw_ratio_data:
+        if not isinstance(item, dict):
+            continue
+
+        product_service = str(item.get('product_service') or '').strip()
+        if not product_service:
+            continue
+
+        try:
+            ratio_value = Decimal(str(item.get('ratio')))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+
+        normalized_item = dict(item)
+        normalized_item['product_service'] = product_service
+        normalized_item['ratio'] = float(ratio_value)
+        normalized_ratio_data.append(normalized_item)
+        total_ratio += ratio_value
+
+        if product_service == '기타':
+            other_item = normalized_item
+
+    if normalized_ratio_data and total_ratio < Decimal('99'):
+        remaining_ratio = (Decimal('100') - total_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+        if remaining_ratio > 0:
+            if other_item:
+                updated_ratio = Decimal(str(other_item['ratio'])) + remaining_ratio
+                other_item['ratio'] = float(updated_ratio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            else:
+                normalized_ratio_data.append({
+                    'product_service': '기타',
+                    'revenue': None,
+                    'ratio': float(remaining_ratio),
+                })
+
+    return normalized_ratio_data
+
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
 
@@ -164,7 +273,8 @@ def ai_page(request, stock_code):
     if show_ratio:
         try:
             # JSON 문자열 파싱, 딕셔너리 형태로 전환해서 넘김
-            ratio_data = json.loads(report.product_ratio_ai)
+            ratio_data = normalize_product_ratio_data(json.loads(report.product_ratio_ai))
+            show_ratio = bool(ratio_data)
         except (json.JSONDecodeError, TypeError):
             show_ratio = False # json 못가져오면 show_ratio False로 해서 안보여줌
 
@@ -236,12 +346,15 @@ def overview(request, stock_code=None):
             'kosdaq': float(market_index_map.get(s.reference_date, 0)) if market_index_map.get(s.reference_date) else None
         }) # chart_data 리스트에 딕셔너리 형태로 날짜, 종가, 코스닥 지수 넣음
 
+    company_currency = resolve_company_currency(finance_data)
     context = {
         'company': company,
         'stock_data': stock_data,
         'index_data': index_data,
         'finance_data': finance_data,
         'chart_data_json': chart_data,
+        'price_unit_label': get_price_unit_label(company_currency),
+        'latest_price_date': latest_date,
     }
     return render(request, 'overview.html', context)
 
@@ -1055,7 +1168,7 @@ def finance(request, stock_code=None):
     latest_company_finance = CompanyFinance.objects.filter(
         stock_code=stock_code
     ).values(
-        'biz_year', 'equity', 'net_income'
+        'biz_year', 'equity', 'net_income', 'currency'
     ).exclude(
         biz_year__isnull=True
     ).order_by(
@@ -1194,6 +1307,19 @@ def industry(request, stock_code=None):
             'sales_trend_desc': default_desc,
             'sales_trend_tone': 'neutral',
         }
+
+    def has_industry_appeal_data(growth_data):
+        if not growth_data:
+            return False
+
+        labels = growth_data.get('growth_chart_labels') or []
+        industry_asset = growth_data.get('industry_asset_growth') or []
+        industry_sales = growth_data.get('industry_sales_growth') or []
+
+        valid_asset_count = len([value for value in industry_asset if value is not None])
+        valid_sales_count = len([value for value in industry_sales if value is not None])
+
+        return len(labels) >= 3 and valid_asset_count >= 3 and valid_sales_count >= 3
 
     def empty_structure_context():
         return {
@@ -1395,23 +1521,7 @@ def industry(request, stock_code=None):
             'reference_date': reference_date,
         }
 
-    def build_io_name_map():
-        io_name_map = {}
-        rows = (
-            BokIo.objects.exclude(io_code__isnull=True)
-            .exclude(io_code='')
-            .exclude(io_name__isnull=True)
-            .values('io_code', 'io_name')
-            .order_by('io_code')
-        )
-        for row in rows:
-            code = row.get('io_code')
-            name = row.get('io_name')
-            if code and code not in io_name_map and name:
-                io_name_map[code] = name
-        return io_name_map
-
-    def build_structure_rows(rows, counterpart_field, io_name_map):
+    def build_structure_rows(rows, counterpart_field, ecos_io_name_map):
         result = []
         for row in rows:
             counterpart_code = getattr(row, counterpart_field, None)
@@ -1422,7 +1532,7 @@ def industry(request, stock_code=None):
             result.append(
                 {
                     'io_code': counterpart_code,
-                    'io_name': io_name_map.get(counterpart_code) or counterpart_code,
+                    'io_name': ecos_io_name_map.get(counterpart_code) or counterpart_code,
                     'trade_vol': trade_vol,
                 }
             )
@@ -1433,6 +1543,7 @@ def industry(request, stock_code=None):
         if not company_obj.ind_code:
             return empty
 
+        ecos_io_name_map = get_ecos_io_name_map()
         option_rows = (
             BokIo.objects.filter(ind_code=company_obj.ind_code)
             .exclude(io_code__isnull=True)
@@ -1445,11 +1556,13 @@ def industry(request, stock_code=None):
         seen_codes = set()
         for row in option_rows:
             code = row.get('io_code')
-            name = row.get('io_name') or code
+            name = ecos_io_name_map.get(code) or row.get('io_name') or code
             if not code or code in seen_codes:
                 continue
             seen_codes.add(code)
             options.append({'io_code': code, 'io_name': name})
+
+        options.sort(key=lambda option: (option['io_name'], option['io_code']))
 
         if not options:
             return empty
@@ -1466,7 +1579,6 @@ def industry(request, stock_code=None):
                 'structure_year': None,
             }
 
-        io_name_map = build_io_name_map()
         structure_map = {}
         for option in options:
             code = option['io_code']
@@ -1482,9 +1594,9 @@ def industry(request, stock_code=None):
 
             structure_map[code] = {
                 'io_code': code,
-                'io_name': option['io_name'] or io_name_map.get(code) or code,
-                'suppliers': build_structure_rows(supplier_rows, 'in_io_code', io_name_map),
-                'buyers': build_structure_rows(buyer_rows, 'out_io_code', io_name_map),
+                'io_name': ecos_io_name_map.get(code) or option['io_name'] or code,
+                'suppliers': build_structure_rows(supplier_rows, 'in_io_code', ecos_io_name_map),
+                'buyers': build_structure_rows(buyer_rows, 'out_io_code', ecos_io_name_map),
             }
 
         return {
@@ -1515,6 +1627,7 @@ def industry(request, stock_code=None):
             'industry_top10_right': [],
             'industry_reference_date': None,
             'company_topic_particle': '은',
+            'show_industry_appeal': False,
             **empty_structure_context(),
             **empty_growth_context(),
         }
@@ -1572,6 +1685,7 @@ def industry(request, stock_code=None):
         'industry_top10_right': industry_top10_right,
         'industry_reference_date': industry_reference_date,
         'company_topic_particle': company_topic_particle(company.corp_name),
+        'show_industry_appeal': has_industry_appeal_data(growth_context),
         **structure_context,
         **growth_context,
     }

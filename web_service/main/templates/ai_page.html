@@ -247,21 +247,31 @@
         ratioJson.sort((a, b) => b.ratio - a.ratio);
     }
     const colorPalette = ["#FFC2D1", "#FFD39A", "#FFE47A", "#DFF2A8", "#CFEED6", "#C9EEE8", "#C7E8F2", "#CFE1FF", "#D6D4FF", "#DCC7FF", "#E7D1FF", "#F2D4FF", "#FFCFE6", "#FFD7CC", "#FFE0C2", "#EEF2A0", "#DDF4D8", "#D6F4EE", "#D6EBFF", "#E1E1FF"]; // 색상 목록들
+    const otherColor = "#E5E7EB"; // 기타 항목 전용 옅은 회색
 
     function formatRevenue(val) {
-        if (!val) return "0"; // 데이터 없으면 "0" 반환
-        const numPart = val.toString().replace(/[^0-9]/g, ''); // 데이터에서 뒤에 단위 지움
-        const unitPart = val.toString().replace(/[0-9]/g, '');  // 데이터에서 단위만 남기고 숫자 지움
+        if (val === null || val === undefined) return ""; // 데이터 없으면 빈 문자열 반환
+        const rawValue = val.toString().trim();
+        if (!rawValue) return "";
+
+        const numPart = rawValue.replace(/[^0-9]/g, ''); // 데이터에서 뒤에 단위 지움
+        const unitPart = rawValue.replace(/[0-9]/g, '').trim();  // 데이터에서 단위만 남기고 숫자 지움
+
+        if (!numPart) return rawValue;
         return Number(numPart).toLocaleString() + (unitPart || "원"); // 추출한 문자열을 숫자로 바꿔서 쉼표 찍어주고, 아까 추출한 단위 추가하거나, 없었으면 '원'을 붙임
     }
 
     if (ratioJson && ratioJson.length > 0) { // json 데이터가 있을 때만 수행
         const topLegend = document.getElementById('topLegendArea'); // body에서 id가 topLegendArea인 부분 가져옴
         const rightList = document.getElementById('rightLegendList'); // body에서 id가 rightLegendList인 부분 가져옴
+        const backgroundColors = ratioJson.map((item, index) =>
+            item.product_service === '기타' ? otherColor : colorPalette[index % colorPalette.length]
+        );
 
         ratioJson.forEach((item, index) => { // 아까 색상 목록에 해당하는 애를 % 연산으로 돌리면서 입힘
-            const color = colorPalette[index % colorPalette.length];
+            const color = backgroundColors[index];
             const formattedRev = formatRevenue(item.revenue); // ,랑 원 붙이는 함수
+            const revenueSuffix = formattedRev ? ` (${formattedRev})` : '';
 
             const topItem = document.createElement('div'); // div 태그 만듦
             topItem.className = 'top-legend-item'; // 범례용으로 만들어 뒀던 클래스
@@ -269,7 +279,7 @@
             topLegend.appendChild(topItem); // 넣음
 
             const listItem = document.createElement('li'); // li 태그 만듦
-            listItem.innerHTML = `${item.product_service} : ${item.ratio}% (${formattedRev})`; // 글자로 내용 채움
+            listItem.innerHTML = `${item.product_service} : ${item.ratio}%${revenueSuffix}`; // 글자로 내용 채움
             rightList.appendChild(listItem); // 넣음
         });
 
@@ -280,7 +290,7 @@
                 labels: ratioJson.map(item => item.product_service), // json 데이터에서 product_service 가져와서 라벨로 사용
                 datasets: [{
                     data: ratioJson.map(item => item.ratio), // json 데이터에서 ratio 가져와서 데이터로 사용
-                    backgroundColor: colorPalette, // 색상 목록에서 색깔 가져옴
+                    backgroundColor: backgroundColors, // 기타는 고정 회색, 나머지는 기본 팔레트 사용
                     borderWidth: 2, // 경계선
                     hoverOffset: 15 // 마우스 올리면 15 만큼 밖으로 튀어나오게 보여줌
                 }]
@@ -298,9 +308,10 @@
                         callbacks: {
                             label: function(context) {
                                 const item = ratioJson[context.dataIndex]; // 마우스 올라간 조각을 확인해서 json 데이터에서 해당하는 항목 정보를 가져옴
+                                const formattedRev = formatRevenue(item.revenue);
                                 return [
                                     //item.product_service, // 이거는 product_service를 이미 한번 보여줘서 지웠는데, 나중에 필요하면 주석 해제
-                                    ` 비중: ${item.ratio}% (${formatRevenue(item.revenue)})` // 비율, 금액을 보여줌
+                                    formattedRev ? ` 비중: ${item.ratio}% (${formattedRev})` : ` 비중: ${item.ratio}%` // 비율, 금액을 보여줌
                                 ];
                             }
                         }
