@@ -129,8 +129,8 @@
         <nav class="tabs">  <!-- 상단의 탭 부분 -->
             <a href="{% url 'overview' company.stock_code %}" class="tab-item">요약</a>
             <a href="#" class="tab-item active">사업 정보</a>
-            <a href="{% url 'finance' company.stock_code %}" class="tab-item">재무 정보</a>
-            <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 정보</a>
+            <a href="{% url 'finance' company.stock_code %}" class="tab-item">기업 분석</a>
+            <a href="{% url 'industry' company.stock_code %}" class="tab-item">산업 분석</a>
         </nav>
     </header>
 
@@ -143,13 +143,15 @@
         <div class="card-header-flex">
             <h2 class="card-title">회사 개요</h2> <!-- 회사 개요 부분 -->
             <span class="card-source-text">
-                <a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo={{ report.report_num }}" target="_blank" rel="noopener noreferrer" class="hidden-link">
-                    {% if report.report_name %}
-                        자료: 금융감독원 전자공시 - {{ report.report_name }}
-                    {% else %}
-                        자료: 금융감독원 전자공시 사업보고서(접수일자 : {{ report.report_date|slice:":4" }}.{{ report.report_date|slice:"4:6" }}.{{ report.report_date|slice:"6:" }})
-                    {% endif %}
-                </a>
+                {% if report %} <a href="https://dart.fss.or.kr/dsaf001/main.do?rcpNo={{ report.report_num }}" target="_blank" rel="noopener noreferrer" class="hidden-link">
+                        {% if report.report_name %}
+                            자료: 금융감독원 전자공시 - {{ report.report_name }}
+                        {% else %}
+                            자료: 금융감독원 전자공시 사업보고서(접수일자 : {{ report.report_date|slice:":4" }}.{{ report.report_date|slice:"4:6" }}.{{ report.report_date|slice:"6:" }})
+                        {% endif %}
+                    </a>
+                {% else %} 자료: 금융감독원 전자공시
+                {% endif %}
             </span>
         </div>
     
@@ -168,27 +170,33 @@
         </div>
     </section>
 
-    {% if report %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블에 내용이 있는 경우 -->
-    <section class="section-block">
-        <h2 class="card-title">사업 개요</h2> <!-- 사업 개요 부분 -->
-        <div class="card">
-            <div class="content-text">{{ report.outline_ai }}</div>
-        </div>
-    </section>
+    {% if has_main_content %} {% if show_outline %} <!-- 화면에 보여줄 내용이 있고, outline도 있는경우 -->
+        <section class="section-block">
+            <h2 class="card-title">사업 개요</h2> <!-- 사업 개요 부분 -->
+            <div class="card">
+                <div class="content-text">{{ report.outline_ai }}</div>
+            </div>
+        </section>
+        {% endif %}
 
-    <section class="section-block">
-        <h2 class="card-title">핵심 제품 및 서비스</h2> <!-- 핵심 제품 및 서비스 부분 -->
-        <div class="card">
-            <div class="content-text">{{ report.product_ai }}</div>
-        </div>
-    </section>
+        {% if show_product %}
+        <section class="section-block">
+            <h2 class="card-title">핵심 제품 및 서비스</h2> <!-- 핵심 제품 및 서비스 부분 -->
+            <div class="card">
+                <div class="content-text">{{ report.product_ai }}</div>
+            </div>
+        </section>
+        {% endif %}
 
-    <section class="section-block">
-        <h2 class="card-title">매출 및 수주 상황</h2> <!-- 매출 및 수주 상황 부분 -->
-        <div class="card">
-            <div class="content-text">{{ report.sales_ai }}</div>
-        </div>
-    </section>
+        {% if show_sales %}
+        <section class="section-block">
+            <h2 class="card-title">매출 및 수주 상황</h2> <!-- 매출 및 수주 상황 부분 -->
+            <div class="card">
+                <div class="content-text">{{ report.sales_ai }}</div>
+            </div>
+        </section>
+        {% endif %}
+        
     {% else %} <!-- 해당 종목으로 db 조회했을 때 REPORT 테이블의 제일 최신 데이터가 적재중이고, 기존 데이터도 없는 경우 -->
     <section class="section-block">
         <div class="card" style="text-align: center; padding: 60px 20px;">

@@ -143,22 +143,41 @@ def ai_page(request, stock_code):
     # 최신 보고서 날짜순(-report_date)으로 정렬하여 해당 종목의 모든 리포트를 가져옴
     reports = Report.objects.filter(stock_code=stock_code).order_by('-report_date')
     
-    report = None # 다 채워진 보고서가 없으면 None이 되는 것
+    best_report = None
+    max_core_count = -1
+    
     for r in reports:
-        # 5개 항목 중 하나라도 비어있으면(is_invalid가 True면) 통과하고 다음 예전 데이터를 확인
-        if (
-            not is_invalid(r.history_ai) and
-            not is_invalid(r.outline_ai) and
-            not is_invalid(r.product_ai) and
-            not is_invalid(r.product_ratio_ai) and
+        # history와 ratio는 무시하고, 확실한 본문 3대장만으로 유효 개수(0~3개)를 셈(history랑 ratio 부분은 None인 경우가 있었어서 제외한 것, 나머지는 웬만하면 None이 없는 파트)
+        core_count = sum([
+            not is_invalid(r.outline_ai),
+            not is_invalid(r.product_ai),
             not is_invalid(r.sales_ai)
-        ):
-            report = r
-            break  # 5개가 모두 다 채워진 최신 데이터를 찾으면 반복문 종료
+        ])
+        
+        # 핵심 항목이 더 많이 채워진 리포트가 있으면 교체 (동점일 경우 최신 데이터 유지)
+        if core_count > max_core_count:
+            max_core_count = core_count
+            best_report = r
+            
+        # 핵심 3개가 모두 꽉 찬 데이터를 찾았다면, 더 이상 과거 내역을 뒤질 필요 없이 즉시 종료
+        if max_core_count == 3:
+            break
 
-    # 주요 연혁 및 제품 비중 노출 여부 판단
-    show_history = report and not is_invalid(report.history_ai) # report가 있으면서 history_ai랑 product_ratio_ai는 None이 아니어야 홈페이지에 띄우기 위한 용도
+    # DB에 리포트는 있는데 AI 데이터가 단 1개도 없는 극초기 상태라면, 가장 최신 빈 껍데기 선택 (준비중 화면용)
+    if best_report is None and reports.exists():
+        best_report = reports.first()
+
+    report = best_report
+
+    # 각 항목별 노출 여부 결정
+    show_history = report and not is_invalid(report.history_ai)
+    show_outline = report and not is_invalid(report.outline_ai)
+    show_product = report and not is_invalid(report.product_ai)
+    show_sales = report and not is_invalid(report.sales_ai)
     show_ratio = report and not is_invalid(report.product_ratio_ai)
+    
+    # 사업 개요, 제품, 매출 중 하나라도 보여줄 수 있는지 판단 (모두 없으면 '준비중' 화면을 띄우기 위함)
+    has_main_content = show_outline or show_product or show_sales
 
     ratio_data = []
     if show_ratio:
@@ -172,10 +191,14 @@ def ai_page(request, stock_code):
         'company': company,
         'report': report,
         'show_history': show_history,
+        'show_outline': show_outline,
+        'show_product': show_product,
+        'show_sales': show_sales,
         'show_ratio': show_ratio,
-        'ratio_data': ratio_data, # 템플릿의 json_script에서 사용
+        'has_main_content': has_main_content,
+        'ratio_data': ratio_data,
     }
-    return render(request, 'ai_page.html', context)
+    return render(request, 'ai_page.html', context) # 템플릿의 json_script에서 사용
 
 def overview(request, stock_code=None):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
