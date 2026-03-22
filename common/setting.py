@@ -24,8 +24,8 @@ db_config = {
 
 pool = PooledDB(
     creator=pymysql,
-    maxconnections=20, # 최대 동시 연결 수
-    mincached=5, # 최소 유지 연결 수
+    maxconnections=30, # 최대 동시 연결 수
+    mincached=0, # 최소 유지 연결 수
     blocking=True, # 연결이 꽉 차면 기다림
     ping=1,  # 커넥션을 풀에서 가져올 때 살아있는지 확인하고, 죽었으면 재연결
     **db_config

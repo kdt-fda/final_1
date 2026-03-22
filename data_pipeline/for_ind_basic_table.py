@@ -346,11 +346,11 @@ def load_ind_bok_all(conn):
 
 if __name__ == "__main__":
     conn = get_connection()
+    try:
+        create_ind_basic(conn)
+        create_ind_bok(conn)
 
-    create_ind_basic(conn)
-    create_ind_bok(conn)
-
-    load_ind_basic(conn)
-    load_ind_bok_all(conn)
-
-    conn.close()
+        load_ind_basic(conn)
+        load_ind_bok_all(conn)
+    finally:
+        conn.close()

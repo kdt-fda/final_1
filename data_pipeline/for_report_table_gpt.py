@@ -21,118 +21,122 @@ def create_batch_file():
     generation_report = {}
     
     # db 데이터 조회
+    conn = get_connection()
     try:
-        with get_connection() as conn:
-            with conn.cursor() as cursor:
-                sql = """
-                    SELECT 
-                        r.id, r.stock_code, b.corp_name,
-                        r.history_origin, r.outline_origin, r.product_origin, r.sales_origin,
-                        r.history_ai, r.outline_ai, r.product_ai, r.sales_ai, r.product_ratio_ai
-                    FROM REPORT r
-                    JOIN BASIC b ON r.stock_code = b.stock_code
-                    WHERE r.history_ai IS NULL OR r.history_ai = ''
-                    OR r.outline_ai IS NULL OR r.outline_ai = ''
-                    OR r.product_ai IS NULL OR r.product_ai = ''
-                    OR r.product_ratio_ai IS NULL OR r.product_ratio_ai = ''
-                    OR r.sales_ai IS NULL OR r.sales_ai = ''
-                """ # LIMIT 3 추가해서 테스트 해보기
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT 
+                    r.id, r.stock_code, b.corp_name,
+                    r.history_origin, r.outline_origin, r.product_origin, r.sales_origin,
+                    r.history_ai, r.outline_ai, r.product_ai, r.sales_ai, r.product_ratio_ai
+                FROM REPORT r
+                JOIN BASIC b ON r.stock_code = b.stock_code
+                WHERE r.history_ai IS NULL OR r.history_ai = ''
+                OR r.outline_ai IS NULL OR r.outline_ai = ''
+                OR r.product_ai IS NULL OR r.product_ai = ''
+                OR r.product_ratio_ai IS NULL OR r.product_ratio_ai = ''
+                OR r.sales_ai IS NULL OR r.sales_ai = ''
+            """ # LIMIT 3 추가해서 테스트 해보기
 
-                cursor.execute(sql)
-                rows = cursor.fetchall()
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            
+            if not rows: 
+                print("처리할 데이터(ai 부분이 빈 기업)가 없습니다.")
+                return None
+
+            print(f"조회된 데이터 개수: {len(rows)}개")
+
+            # 배치 태스크 생성
+            total_rows = len(rows)
+            for idx, row in enumerate(rows):
+                corp = row['corp_name']
+                if (idx + 1) % 10 == 0 or (idx + 1) == total_rows: # 10개마다 혹은 마지막에 진행 상황 출력
+                    print(f"데이터 대조 및 계승 확인 중 ({idx + 1}/{total_rows})")
                 
-                if not rows: 
-                    print("처리할 데이터(ai 부분이 빈 기업)가 없습니다.")
-                    return None
+                # 해당 기업의 직전 보고서 조회 (기재정정 시 데이터 계승용)
+                prev_sql = """
+                    SELECT history_origin, history_ai, outline_origin, outline_ai, 
+                            product_origin, product_ai, product_ratio_ai, sales_origin, sales_ai
+                    FROM REPORT 
+                    WHERE stock_code = %s AND id < %s 
+                    ORDER BY id DESC LIMIT 1
+                """
+                cursor.execute(prev_sql, (row['stock_code'], row['id']))
+                prev_data = cursor.fetchone()
+                
+                # 해당 기업의 리포트 초기화 (0은 누락인거)
+                generation_report[corp] = {
+                    "history": 0,
+                    "outline": 0,
+                    "product": 0,
+                    "product_ratio": 0,
+                    "sales": 0
+                }
+                
+                inheritance_updates = {} # 계승할 데이터를 담을 딕셔너리
+                
+                # 일반 섹션 설정 (history, outline, sales)
+                base_configs = [
+                    ('history', prompt_history, row['history_origin'], 'history_ai'),
+                    ('outline', prompt_outline, row['outline_origin'], 'outline_ai'),
+                    ('sales', prompt_sales, row['sales_origin'], 'sales_ai')
+                ]
+                
+                for key, prompt, current_content, ai_col in base_configs:
+                    if current_content and (not row[ai_col] or str(row[ai_col]).strip() == ''):
+                        # 이전 원문 및 AI 답변이 있으면 가져옴
+                        prev_content = prev_data.get(f"{key}_origin") if prev_data else None
+                        prev_ai = prev_data.get(ai_col) if prev_data else None
+                        
+                        # 내용 비교해서 일치하면 기존 AI 답변 계승
+                        if prev_content and prev_ai and prev_content.strip() == current_content.strip():
+                            inheritance_updates[ai_col] = prev_ai
+                        else:
+                            # 내용이 없거나 다르면 신규 태스크 생성
+                            task = create_batch_task(
+                                custom_id=f"{key}-{row['id']}-{corp}",
+                                system_prompt=prompt,
+                                user_content=current_content
+                            )
+                            batch_tasks.append(task)
+                            generation_report[corp][key] = 1 
 
-                print(f"조회된 데이터 개수: {len(rows)}개")
-
-                # 배치 태스크 생성
-                total_rows = len(rows)
-                for idx, row in enumerate(rows):
-                    corp = row['corp_name']
-                    if (idx + 1) % 10 == 0 or (idx + 1) == total_rows: # 10개마다 혹은 마지막에 진행 상황 출력
-                        print(f"데이터 대조 및 계승 확인 중 ({idx + 1}/{total_rows})")
-                    
-                    # 해당 기업의 직전 보고서 조회 (기재정정 시 데이터 계승용)
-                    prev_sql = """
-                        SELECT history_origin, history_ai, outline_origin, outline_ai, 
-                               product_origin, product_ai, product_ratio_ai, sales_origin, sales_ai
-                        FROM REPORT 
-                        WHERE stock_code = %s AND id < %s 
-                        ORDER BY id DESC LIMIT 1
-                    """
-                    cursor.execute(prev_sql, (row['stock_code'], row['id']))
-                    prev_data = cursor.fetchone()
-                    
-                    # 해당 기업의 리포트 초기화 (0은 누락인거)
-                    generation_report[corp] = {
-                        "history": 0,
-                        "outline": 0,
-                        "product": 0,
-                        "product_ratio": 0,
-                        "sales": 0
-                    }
-                    
-                    inheritance_updates = {} # 계승할 데이터를 담을 딕셔너리
-                    
-                    # 일반 섹션 설정 (history, outline, sales)
-                    base_configs = [
-                        ('history', prompt_history, row['history_origin'], 'history_ai'),
-                        ('outline', prompt_outline, row['outline_origin'], 'outline_ai'),
-                        ('sales', prompt_sales, row['sales_origin'], 'sales_ai')
-                    ]
-                    
-                    for key, prompt, current_content, ai_col in base_configs:
-                        if current_content and (not row[ai_col] or str(row[ai_col]).strip() == ''):
-                            # 이전 원문 및 AI 답변이 있으면 가져옴
-                            prev_content = prev_data.get(f"{key}_origin") if prev_data else None
+                # product 및 product_ratio 통합 처리 (원문 product_origin 공유 대응)
+                p_content = row['product_origin']
+                if p_content:
+                    for k, p, ai_col in [('product', prompt_product, 'product_ai'), ('product_ratio', prompt_product_ratio, 'product_ratio_ai')]:
+                        if not row[ai_col] or str(row[ai_col]).strip() == '':
+                            prev_p_content = prev_data.get("product_origin") if prev_data else None
                             prev_ai = prev_data.get(ai_col) if prev_data else None
                             
-                            # 내용 비교해서 일치하면 기존 AI 답변 계승
-                            if prev_content and prev_ai and prev_content.strip() == current_content.strip():
+                            if prev_p_content and prev_ai and prev_p_content.strip() == p_content.strip():
                                 inheritance_updates[ai_col] = prev_ai
                             else:
-                                # 내용이 없거나 다르면 신규 태스크 생성
                                 task = create_batch_task(
-                                    custom_id=f"{key}-{row['id']}-{corp}",
-                                    system_prompt=prompt,
-                                    user_content=current_content
+                                    custom_id=f"{k}-{row['id']}-{corp}",
+                                    system_prompt=p,
+                                    user_content=p_content
                                 )
                                 batch_tasks.append(task)
-                                generation_report[corp][key] = 1 
+                                generation_report[corp][k] = 1
 
-                    # product 및 product_ratio 통합 처리 (원문 product_origin 공유 대응)
-                    p_content = row['product_origin']
-                    if p_content:
-                        for k, p, ai_col in [('product', prompt_product, 'product_ai'), ('product_ratio', prompt_product_ratio, 'product_ratio_ai')]:
-                            if not row[ai_col] or str(row[ai_col]).strip() == '':
-                                prev_p_content = prev_data.get("product_origin") if prev_data else None
-                                prev_ai = prev_data.get(ai_col) if prev_data else None
-                                
-                                if prev_p_content and prev_ai and prev_p_content.strip() == p_content.strip():
-                                    inheritance_updates[ai_col] = prev_ai
-                                else:
-                                    task = create_batch_task(
-                                        custom_id=f"{k}-{row['id']}-{corp}",
-                                        system_prompt=p,
-                                        user_content=p_content
-                                    )
-                                    batch_tasks.append(task)
-                                    generation_report[corp][k] = 1
-
-                    # 계승된 답변이 있다면 즉시 DB 업데이트
-                    if inheritance_updates:
-                        set_clause = ", ".join([f"{k} = %s" for k in inheritance_updates.keys()])
-                        cursor.execute(f"UPDATE REPORT SET {set_clause} WHERE id = %s", 
-                                       list(inheritance_updates.values()) + [row['id']])
-                    
-                    # 각 기업별 처리가 끝날 때마다 커밋 (안전장치)
-                    conn.commit()
+                # 계승된 답변이 있다면 즉시 DB 업데이트
+                if inheritance_updates:
+                    set_clause = ", ".join([f"{k} = %s" for k in inheritance_updates.keys()])
+                    cursor.execute(f"UPDATE REPORT SET {set_clause} WHERE id = %s", 
+                                    list(inheritance_updates.values()) + [row['id']])
+                
+                # 각 기업별 처리가 끝날 때마다 커밋 (안전장치)
+                conn.commit()
 
     except Exception as e:
+        conn.rollback()
         print((f"DB 연결 또는 쿼리 실행 중 오류 발생: {e}"))
         return None
+    
+    finally:
+        conn.close()
 
     # 기존 데이터 계승(스킵) 리포트 출력
     print("\n" + "="*50)

@@ -41,7 +41,8 @@ def upload_to_report_ai(gpt, batch_job):
     results = file_response.text.strip().split('\n')
     
     success_count = 0
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         with conn.cursor() as cursor:
             for line in results:
                 if not line.strip(): # 빈줄이면 넘김
@@ -103,12 +104,15 @@ def upload_to_report_ai(gpt, batch_job):
                     success_count += 1
                     
                 except Exception as e:
+                    conn.rollback()
                     msg = f"데이터 db update 중 예외 발생 ({custom_id}): {e}"
                     print(msg)
                     logging.error(msg)
             
             conn.commit()
             print(f"{success_count}건 DB 적재됨 (Job ID: {batch_job.id})")
+    finally:
+        conn.close()
 
 def check_batch_jobs():
     gpt = init_gpt()

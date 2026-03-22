@@ -188,15 +188,19 @@ def upload_to_report_origin():
     df = df.replace({np.nan: None}) # NaN(결측치)을 SQL NULL 처리를 위해 None으로 변환
     
     try:
-        with get_connection() as conn:
+        conn = get_connection()
+        try:
             create_report(conn)
+        finally:
+            conn.close()
     except Exception as e:
         print(f"초기 DB 생성 실패: {e}")
         return
 
     total_rows = len(df)
     
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         with conn.cursor() as cursor:
             for index, row in df.iterrows():
                 current_num = index + 1
@@ -313,13 +317,16 @@ def upload_to_report_origin():
                         conn.commit()
                 
                 except Exception as e: # 한 종목에서 에러 발생 시
+                    conn.rollback()
                     print(f"{corp_name} 처리 중 오류 발생: {e}")
                     logging.error(f"[{current_num}/{total_rows}] {corp_name} 처리 중 에러: {str(e)}")
                     continue # 다음 종목(for문의 다음 index)으로 진행
                 
             # 모든 루프 종료 후 남은 데이터 커밋
             conn.commit()
-            print('======= 원문 db 적재 완료, 불완전 보고서 삭제 및 비활성화 진행 =======')    
+            print('======= 원문 db 적재 완료, 불완전 보고서 삭제 및 비활성화 진행 =======')
+    finally:
+        conn.close()
 
 def main():
     upload_to_report_origin()
