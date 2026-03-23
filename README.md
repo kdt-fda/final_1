@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # final_1
 ---
 
@@ -53,3 +54,5 @@ ID=
 PW=
 KRX_AUTH_KEY=
 ```
+=======
+>>>>>>> efa7ab9b8a3f3f941acdfaa3163737e1a30c3542
