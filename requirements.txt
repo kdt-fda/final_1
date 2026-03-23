@@ -151,4 +151,8 @@ pymysql
 gunicorn
 dbutils
 opendartreader
+<<<<<<< HEAD
 mysqlclient
+=======
+mysqlclient
+>>>>>>> 21d24ae93f5c1f33685ff5529e94e764c169bb06
