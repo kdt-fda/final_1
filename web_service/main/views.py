@@ -12,7 +12,7 @@ import pandas as pd
 from django.db.models import OuterRef, Q, Subquery
 from django.db.utils import OperationalError, ProgrammingError
 
-from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex
+from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex, Label
 
 
 COMPETITIVENESS_METRICS = [
@@ -315,6 +315,22 @@ def ai_page(request, stock_code):
 
 def overview(request, stock_code=None):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
+    
+    # LABEL 테이블에서 알파값이 null이 아닌 제일 최신 asof_date
+    latest_label = Label.objects.filter(
+        stock_code=stock_code,
+        alpha__isnull=False
+    ).order_by('-asof_date').first()
+    
+    # 알파값에 100 곱하기
+    if latest_label and latest_label.alpha is not None:
+        latest_label.alpha = float(latest_label.alpha) * 100
+    
+    # LABEL 테이블에서 기준일 보여주기 위해 필요한 부분
+    max_label = Label.objects.filter(
+        stock_code=stock_code
+    ).order_by('-asof_date').first()
+    max_asof_date = max_label.asof_date if max_label else None
 
     # COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
     latest_overlap = CompanyStock.objects.filter(
@@ -381,6 +397,8 @@ def overview(request, stock_code=None):
         'chart_data_json': chart_data,
         'price_unit_label': get_price_unit_label(company_currency),
         'latest_price_date': latest_date,
+        'latest_label': latest_label,
+        'max_asof_date': max_asof_date,
     }
     return render(request, 'overview.html', context)
 
