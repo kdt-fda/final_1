@@ -120,40 +120,46 @@
             <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
         </section>
         
-        <!-- 은영님 수정하실 부분 -->
         <section class="section-block">
-            <h2 class="card-title">투자 의견</h2>
+            <h2 class="card-title">최근 기준 성과</h2> <!-- 최근 기준 성과 부분 -->
             <div class="card" style="padding: 40px 20px;">
                 <div style="display: flex; justify-content: center; align-items: center; gap: 80px;">
                     
-                    <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-                        <span style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 10px;">
-                            <span style="color: #3498db; font-weight: 800;">Open-Q</span> 종목 분석 결과
-                        </span>
-                        <span style="font-size: 2.5rem; font-weight: 900; color: #ff4757; letter-spacing: 2px; line-height: 1;">
-                            BUY
-                        </span>
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center;">
+                        {% if latest_label %}
+                            <div style="font-size: 2rem; color: #000000; font-weight: 800; margin-bottom: 8px;">
+                                KOSDAQ 초과 수익률 : 
+                                {% if latest_label.alpha > 0 %}
+                                    <span style="color: #ff4757;">+{{ latest_label.alpha|floatformat:2 }}%</span>
+                                {% elif latest_label.alpha < 0 %}
+                                    <span style="color: #3498db;">{{ latest_label.alpha|floatformat:2 }}%</span>
+                                {% else %}
+                                    <span style="color: #000000;">{{ latest_label.alpha|floatformat:2 }}%</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div style="font-size: 1.2rem; color: #999; font-weight: 400;">
+                                (기준일 : {{ latest_label.asof_date|date:"Y.m.d" }}-{{ max_asof_date|date:"Y.m.d" }})
+                            </div>
+                        {% else %}
+                            <div style="font-size: 2rem; color: #3498db; font-weight: 800; margin-bottom: 8px;">
+                                KOSDAQ 초과 수익률 : <span style="color: #111;">-</span>
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div style="width: 1px; height: 70px; background-color: #f0f0f0;"></div>
 
-                    <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-                        <span style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 10px;">
-                            현재주가 <span style="font-size: 2rem; color: #999; font-weight: 400;">({{ latest_price_date|date:"Y.m.d"|default:"데이터 없음" }})</span>
-                        </span>
-                        <span style="font-size: 2.5rem; font-weight: 800; color: #111; line-height: 1;">
-                            {% if stock_data and stock_data.close_price != None %}
-                            {{ stock_data.close_price|intcomma }}<span style="font-size: 2.5rem; font-weight: 600; color: #767676; margin-left: 6px;">원</span>
-                            {% else %}
-                            -
-                            {% endif %}
-                        </span>
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center;">
+                        <div style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 8px;">
+                            주가 <span style="font-size: 1.2rem; color: #999; font-weight: 400;">({{ latest_price_date|date:"Y.m.d"|default:"-" }})</span>
+                        </div>
+                        <div style="font-size: 2.5rem; font-weight: 800; color: #111; line-height: 1;">
+                            {{ stock_data.close_price|default:"-"|intcomma }}<span style="font-size: 2rem; font-weight: 600; color: #767676; margin-left: 6px;">원</span>
+                        </div>
                     </div>
-
-                </div>
             </div>
         </section>
-        <!-- 은영님 수정하실 부분 끝부분 -->
 
         <section class="section-block">
             <h2 class="card-title">기본 정보</h2> <!-- 기본정보 부분 -->
