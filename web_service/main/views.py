@@ -199,58 +199,58 @@ def search(request):
     return render(request, 'search.html', {'results': results, 'query': query})
 
 
-def normalize_product_ratio_data(raw_ratio_data):
-    if not isinstance(raw_ratio_data, list):
-        return []
-
-    normalized_ratio_data = []
-    total_ratio = Decimal('0')
-    other_item = None
-
-    for item in raw_ratio_data:
-        if not isinstance(item, dict):
-            continue
-
-        product_service = str(item.get('product_service') or '').strip()
-        if not product_service:
-            continue
-
-        try:
-            ratio_value = Decimal(str(item.get('ratio')))
-        except (InvalidOperation, TypeError, ValueError):
-            continue
-
-        normalized_item = dict(item)
-        normalized_item['product_service'] = product_service
-        normalized_item['ratio'] = float(ratio_value)
-        normalized_ratio_data.append(normalized_item)
-        total_ratio += ratio_value
-
-        if product_service == '기타':
-            other_item = normalized_item
-
-    if normalized_ratio_data and total_ratio < Decimal('99'):
-        remaining_ratio = (Decimal('100') - total_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        if remaining_ratio > 0:
-            if other_item:
-                updated_ratio = Decimal(str(other_item['ratio'])) + remaining_ratio
-                other_item['ratio'] = float(updated_ratio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-            else:
-                normalized_ratio_data.append({
-                    'product_service': '기타',
-                    'revenue': None,
-                    'ratio': float(remaining_ratio),
-                })
-
-    return normalized_ratio_data
-
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
 
     # 데이터 유효성 검사 (None, 'None', '[]' 등 체크)
     def is_invalid(value):
         return value in [None, 'None', '[]', 'NULL', [], 'null', '', 'NULL']
+
+    def normalize_product_ratio_data(raw_ratio_data):
+        if not isinstance(raw_ratio_data, list):
+            return []
+
+        normalized_ratio_data = []
+        total_ratio = Decimal('0')
+        other_item = None
+
+        for item in raw_ratio_data:
+            if not isinstance(item, dict):
+                continue
+
+            product_service = str(item.get('product_service') or '').strip()
+            if not product_service:
+                continue
+
+            try:
+                ratio_value = Decimal(str(item.get('ratio')))
+            except (InvalidOperation, TypeError, ValueError):
+                continue
+
+            normalized_item = dict(item)
+            normalized_item['product_service'] = product_service
+            normalized_item['ratio'] = float(ratio_value)
+            normalized_ratio_data.append(normalized_item)
+            total_ratio += ratio_value
+
+            if product_service == '기타':
+                other_item = normalized_item
+
+        if normalized_ratio_data and total_ratio < Decimal('99'):
+            remaining_ratio = (Decimal('100') - total_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            if remaining_ratio > 0:
+                if other_item:
+                    updated_ratio = Decimal(str(other_item['ratio'])) + remaining_ratio
+                    other_item['ratio'] = float(updated_ratio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+                else:
+                    normalized_ratio_data.append({
+                        'product_service': '기타',
+                        'revenue': None,
+                        'ratio': float(remaining_ratio),
+                    })
+
+        return normalized_ratio_data
     
     # 최신 보고서 날짜순(-report_date)으로 정렬하여 해당 종목의 모든 리포트를 가져옴
     reports = Report.objects.filter(stock_code=stock_code).order_by('-report_date')
