@@ -272,37 +272,54 @@ def parse_bsns_year_from_report_nm(report_nm: Optional[str], rcept_dt: Optional[
 
 def report_kind_priority(report_nm: Optional[str]) -> int:
     s = safe_str(report_nm) or ""
-    if "사업보고서" in s and "기재정정" not in s and "정정" not in s:
+
+    # 일반 사업보고서 우선
+    if re.match(r"^\s*사업보고서\s*\(", s):
         return 1
-    if "사업보고서" in s and "정정" in s and "기재정정" not in s:
+
+    # [기재정정]사업보고서 차순위
+    if re.match(r"^\s*\[기재정정\]\s*사업보고서\s*\(", s):
         return 2
-    if "기재정정" in s and "사업보고서" in s:
-        return 3
-    if "사업보고서" in s:
-        return 4
+
     return 99
 
 
 def build_business_candidates(report_df: pd.DataFrame) -> pd.DataFrame:
+    empty_cols = ["rcept_no", "report_nm", "rcept_dt", "bsns_year", "priority"]
     if report_df.empty:
-        return pd.DataFrame(columns=["rcept_no", "report_nm", "rcept_dt", "bsns_year", "priority"])
+        return pd.DataFrame(columns=empty_cols)
 
     df = report_df.copy()
     if "report_nm" not in df.columns:
-        return pd.DataFrame(columns=["rcept_no", "report_nm", "rcept_dt", "bsns_year", "priority"])
+        return pd.DataFrame(columns=empty_cols)
 
-    df = df[df["report_nm"].astype(str).str.contains("사업보고서", na=False)].copy()
+    # 사업보고서 / [기재정정]사업보고서 만 허용
+    pattern = r"^\s*(\[(기재정정)\])?\s*사업보고서\s*\("
+    df = df[df["report_nm"].astype(str).str.contains(pattern, na=False, regex=True)].copy()
+
     if df.empty:
-        return pd.DataFrame(columns=["rcept_no", "report_nm", "rcept_dt", "bsns_year", "priority"])
+        return pd.DataFrame(columns=empty_cols)
 
     if "rcept_no" not in df.columns:
         df["rcept_no"] = None
     if "rcept_dt" not in df.columns:
         df["rcept_dt"] = None
 
-    df["bsns_year"] = df.apply(lambda r: parse_bsns_year_from_report_nm(r.get("report_nm"), r.get("rcept_dt")), axis=1)
+    df["bsns_year"] = df.apply(
+        lambda r: parse_bsns_year_from_report_nm(r.get("report_nm"), r.get("rcept_dt")),
+        axis=1,
+    )
     df = df[df["bsns_year"].notna()].copy()
+    if df.empty:
+        return pd.DataFrame(columns=empty_cols)
+
     df["bsns_year"] = df["bsns_year"].astype(int)
+
+    # 2015 사업연도부터만 남김
+    df = df[df["bsns_year"] >= 2015].copy()
+    if df.empty:
+        return pd.DataFrame(columns=empty_cols)
+
     df["priority"] = df["report_nm"].apply(report_kind_priority)
     df["rcept_dt"] = pd.to_datetime(df["rcept_dt"], errors="coerce")
     df["rcept_no"] = df["rcept_no"].astype(str)
@@ -380,8 +397,6 @@ def account_amount(
     return None
 
 
-
-
 def classify_missing_fs_reason(
     stock_code: str,
     biz_year: int,
@@ -406,13 +421,7 @@ def classify_missing_fs_reason(
     if "기재정정" in report_nm_s:
         return (
             "AMENDED_REPORT",
-            "기재정정 사업보고서: 원문/정정본 기준 재확인 필요",
-        )
-
-    if "정정" in report_nm_s or "첨부추가" in report_nm_s:
-        return (
-            "ATTACHMENT_OR_AMENDED_REPORT",
-            "정정/첨부추가 보고서: 원문/첨부 기준 재확인 필요",
+            "기재정정 사업보고서 기준 재확인 필요",
         )
 
     biotech_keywords = ["바이오", "헬스", "제약", "리서치", "이노베이션", "온코"]
@@ -424,8 +433,9 @@ def classify_missing_fs_reason(
 
     return (
         "API_UNAVAILABLE_OR_RAW_PARSING_NEEDED",
-        "OpenDART 정형 재무제표 API 미제공 가능성: 상장 전·코넥스·일반법인·원문파싱 필요",
+        "OpenDART 정형 재무제표 API 미제공 가능성: 원문파싱 또는 별도 처리 필요",
     )
+
 
 def get_statement_snapshot(
     client: OpenDartClient,
@@ -562,7 +572,6 @@ def save_error_log(error_rows: List[Dict[str, Any]], path: str = "feature_raw_d_
     print(f"⚠️ 에러 로그 저장: {path} ({len(df):,} rows)")
 
 
-
 def fetch_existing_feature_raw_d_keys(conn) -> set[tuple[str, int]]:
     sql = """
         SELECT corp_code, biz_year
@@ -588,6 +597,7 @@ def fetch_existing_feature_raw_d_keys(conn) -> set[tuple[str, int]]:
             existing_keys.add((corp_code, int(biz_year)))
 
     return existing_keys
+
 
 def main(
     kosdaq_only: bool = True,
@@ -643,13 +653,6 @@ def main(
                 for _, rpt in yearly_business_reports.iterrows():
                     biz_year = int(rpt["bsns_year"])
 
-                    if biz_year < 2015:
-                        print(
-                            f"[{idx}/{total}] ⏭️ {stock_code} {corp_name or ''} "
-                            f"biz_year={biz_year} 정책상 skip (2015 이전 비지원)"
-                        )
-                        continue
-                    
                     if skip_existing and (corp_code, biz_year) in existing_keys:
                         print(
                             f"[{idx}/{total}] ⏭️ {stock_code} {corp_name or ''} "
