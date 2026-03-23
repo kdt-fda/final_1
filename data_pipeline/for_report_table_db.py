@@ -41,7 +41,8 @@ def upload_to_report_ai(gpt, batch_job):
     results = file_response.text.strip().split('\n')
     
     success_count = 0
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         with conn.cursor() as cursor:
             for line in results:
                 if not line.strip(): # 빈줄이면 넘김
@@ -70,6 +71,32 @@ def upload_to_report_ai(gpt, batch_job):
                     # GPT 답변 추출
                     content = data['response']['body']['choices'][0]['message']['content']
                     
+                    if key == 'product_ratio':
+                        try:
+                            # GPT가 마크다운(```json ... ```)을 붙여서 응답할 경우를 대비해 텍스트 정리
+                            clean_content = content.replace('```json', '').replace('```', '').strip()
+                            ratio_data = json.loads(clean_content)
+                            
+                            # ratio 값들을 float으로 변환하여 합계 계산
+                            total_ratio = sum(float(item.get('ratio', 0)) for item in ratio_data)
+                            
+                            # 합계가 101% 초과 시 or 0% 이하면 더미 데이터로 간주하고 폐기 (None 처리)
+                            if total_ratio > 101.0 or total_ratio <= 0.0:
+                                msg = f"[{corp}] 매출 비중 합계 초과({total_ratio}%). 더미 데이터로 판단하여 폐기합니다."
+                                print(msg)
+                                logging.warning(msg)
+                                content = 'None'
+                            else:
+                                # 정상 데이터라면 마크다운이 지워진 깔끔한 JSON 텍스트로 content 덮어쓰기
+                                content = clean_content
+                                
+                        except Exception as e:
+                            # JSON 파싱 자체를 실패한 경우(GPT가 양식을 완전 파괴한 경우)도 폐기
+                            msg = f"[{corp}] JSON 파싱 에러. 데이터를 폐기합니다: {e}"
+                            print(msg)
+                            logging.warning(msg)
+                            content = 'None'
+                    
                     # DB 업데이트 (항목별 동적 컬럼 지정)
                     column_name = f"{key}_ai"
                     sql = f"UPDATE REPORT SET {column_name} = %s WHERE id = %s"
@@ -77,12 +104,15 @@ def upload_to_report_ai(gpt, batch_job):
                     success_count += 1
                     
                 except Exception as e:
+                    conn.rollback()
                     msg = f"데이터 db update 중 예외 발생 ({custom_id}): {e}"
                     print(msg)
                     logging.error(msg)
             
             conn.commit()
             print(f"{success_count}건 DB 적재됨 (Job ID: {batch_job.id})")
+    finally:
+        conn.close()
 
 def check_batch_jobs():
     gpt = init_gpt()

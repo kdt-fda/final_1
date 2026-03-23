@@ -188,15 +188,19 @@ def upload_to_report_origin():
     df = df.replace({np.nan: None}) # NaN(결측치)을 SQL NULL 처리를 위해 None으로 변환
     
     try:
-        with get_connection() as conn:
+        conn = get_connection()
+        try:
             create_report(conn)
+        finally:
+            conn.close()
     except Exception as e:
         print(f"초기 DB 생성 실패: {e}")
         return
 
     total_rows = len(df)
     
-    with get_connection() as conn:
+    conn = get_connection()
+    try:
         with conn.cursor() as cursor:
             for index, row in df.iterrows():
                 current_num = index + 1
@@ -245,7 +249,26 @@ def upload_to_report_origin():
                     else:
                         # 014가 아닌 다른 치명적 에러면 재시도 의미가 없으므로 탈출
                         break
-                
+                    
+                def check_existing_and_deactivate(cursor_obj, s_code, c_name, reason):
+                    # 기존 REPORT 테이블에 _ai 데이터가 하나라도 채워진 과거 내역이 있는지 확인
+                    cursor_obj.execute("""
+                        SELECT 1 FROM REPORT 
+                        WHERE stock_code = %s 
+                          AND (history_ai IS NOT NULL 
+                               OR outline_ai IS NOT NULL 
+                               OR product_ai IS NOT NULL 
+                               OR sales_ai IS NOT NULL
+                               OR product_ratio_ai IS NOT NULL)
+                    """, (s_code,))
+                    
+                    if cursor_obj.fetchone():
+                        print(f"[{current_num}/{total_rows}] {c_name}: {reason}. (기존 AI 데이터가 존재하여 is_active=True 유지)")
+                    else:
+                        print(f"[{current_num}/{total_rows}] {c_name}: {reason}. (기존 AI 데이터도 없음 -> 비활성화)")
+                        cursor_obj.execute("UPDATE BASIC SET is_active = FALSE WHERE stock_code = %s", (s_code,))
+                        logging.warning(f"{c_name} 비활성화 처리: {reason}")
+                        
                 try:
                     if html: # 사업보고서가 있으면 키워드로 내용 가져와서 마크다운화 하는 것  
                         # 키위드로 본문 내용 가져오는 부분
@@ -266,6 +289,11 @@ def upload_to_report_origin():
                         product = result_data.get('주요 제품 및 서비스')
                         sales = result_data.get('매출 및 수주상황')
                         
+                        if not (history and outline and product and sales):
+                            check_existing_and_deactivate(cursor, stock_code, corp_name, "보고서 본문 내용 일부 누락(금융업 등)")
+                            conn.commit()
+                            continue # 불완전한 원문은 새롭게 DB에 넣지 않고 넘어감
+                        
 
                         # 삽입 및 업데이트
                         sql = """
@@ -285,45 +313,20 @@ def upload_to_report_origin():
                         conn.commit()
 
                     else:
-                        print(f"HTML 사업보고서 수집 실패: {error} -> 비활성화 처리")
-                        cursor.execute("UPDATE BASIC SET is_active = FALSE WHERE stock_code = %s", (stock_code,))
+                        check_existing_and_deactivate(cursor, stock_code, corp_name, f"HTML 수집 실패({error})")
                         conn.commit()
-                        logging.warning(f"[{current_num}/{total_rows}] {corp_name} 건너뜀(보고서 없음): {error}")
                 
                 except Exception as e: # 한 종목에서 에러 발생 시
+                    conn.rollback()
                     print(f"{corp_name} 처리 중 오류 발생: {e}")
                     logging.error(f"[{current_num}/{total_rows}] {corp_name} 처리 중 에러: {str(e)}")
                     continue # 다음 종목(for문의 다음 index)으로 진행
                 
             # 모든 루프 종료 후 남은 데이터 커밋
             conn.commit()
-    
             print('======= 원문 db 적재 완료, 불완전 보고서 삭제 및 비활성화 진행 =======')
-    
-            # 원문 4개를 전부 추출하지 못한 기업은 비활성화 처리
-            deactivate_sql = """
-                UPDATE BASIC b
-                JOIN REPORT r ON b.stock_code = r.stock_code
-                SET b.is_active = FALSE
-                WHERE r.history_origin IS NULL 
-                OR r.outline_origin IS NULL 
-                OR r.product_origin IS NULL 
-                OR r.sales_origin IS NULL;
-            """
-            cursor.execute(deactivate_sql)
-
-            # report 테이블에서 해당 레코드 삭제하여 토큰 아끼기
-            delete_sql = """
-                DELETE FROM REPORT 
-                WHERE history_origin IS NULL
-                    OR outline_origin IS NULL
-                    OR product_origin IS NULL
-                    OR sales_origin IS NULL
-            """
-            cursor.execute(delete_sql)
-            conn.commit()
-            print("불완전한 보고서 삭제 및 해당 기업 비활성화 완료")
-    
+    finally:
+        conn.close()
 
 def main():
     upload_to_report_origin()
