@@ -1,15 +1,18 @@
 from pykrx import stock
+import os
+from dotenv import load_dotenv
+from datetime import datetime
 import pandas as pd
 from pathlib import Path
 import sys
 import time
 
 # 경로 잡기
-TEMP_BASE = Path(__file__).resolve().parents[1]
-if str(TEMP_BASE) not in sys.path:
-    sys.path.append(str(TEMP_BASE))
+temp_base = Path(__file__).resolve().parents[1]
+if str(temp_base) not in sys.path:
+    sys.path.append(str(temp_base))
 
-from common.setting import get_connection
+from common.setting import login_krx, get_connection
 
 
 # -------------------------------------------------
@@ -18,12 +21,11 @@ from common.setting import get_connection
 def create_label(conn):
     """
     LABEL: 종목(stock_code) x 기준일(asof_date) 별 alpha 저장
-    - (stock_code, asof_date) UNIQUE 로 UPSERT 기준 잡음
+    - (stock_code, asof_date) UNIQUE 기준
     """
     try:
         with conn.cursor() as cursor:
-            cursor.execute(
-                """
+            cursor.execute("""
                 CREATE TABLE IF NOT EXISTS LABEL (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     stock_code VARCHAR(10) NOT NULL,
@@ -31,10 +33,9 @@ def create_label(conn):
                     alpha DECIMAL(18,6) NULL,
                     UNIQUE KEY uk_label_stock_date (stock_code, asof_date)
                 );
-                """
-            )
-        conn.commit()
-        print("LABEL 테이블 준비 완료")
+            """)
+        print("LABEL 테이블이 성공적으로 생성되었거나 이미 존재합니다.")
+
     except Exception as e:
         conn.rollback()
         print(f"(롤백됨) LABEL 테이블 생성 중 오류 발생: {e}")
@@ -42,108 +43,60 @@ def create_label(conn):
 
 
 # -------------------------------------------------
-# 2) DB(FEATURE_BASIC) 기준 월말 거래일 생성
+# 2) 월별 "마지막 거래일" 리스트 생성 (KOSDAQ index 기반)
 # -------------------------------------------------
-def get_month_end_trading_dates_from_db(conn, start: str) -> list:
-    """
-    FEATURE_BASIC.date 기준으로 월별 마지막 거래일을 생성.
-    pykrx 지수 API에 의존하지 않음.
-    """
-    sql = """
-    SELECT MAX(date) AS month_end
-    FROM FEATURE_BASIC
-    WHERE date >= %s
-    GROUP BY YEAR(date), MONTH(date)
-    ORDER BY month_end
-    """
+def get_month_end_trading_dates(start: str) -> pd.DatetimeIndex:
+    today = datetime.today().strftime("%Y%m%d")
 
-    start_date = pd.to_datetime(start).date()
+    idx = stock.get_index_ohlcv_by_date(start, today, "2001", name_display=False)
+    if idx is None or idx.empty:
+        raise ValueError("KOSDAQ 지수 데이터가 비어 있습니다.")
 
-    with conn.cursor() as cursor:
-        cursor.execute(sql, (start_date,))
-        rows = cursor.fetchall()
+    idx.index = pd.to_datetime(idx.index)
 
-    if not rows:
-        raise ValueError("FEATURE_BASIC에서 월말 거래일을 찾지 못했습니다.")
+    # 월별 마지막 "실제 거래일"
+    month_end = (
+        idx.groupby(idx.index.to_period("M"))
+           .apply(lambda x: x.index.max())
+    )
 
-    if isinstance(rows[0], dict):
-        month_end_dates = [pd.to_datetime(r["month_end"]).date() for r in rows]
-    else:
-        month_end_dates = [pd.to_datetime(r[0]).date() for r in rows]
+    month_end_dates = pd.DatetimeIndex(pd.to_datetime(month_end.values))
 
-    print(f"DB 기준 월말 거래일 개수: {len(month_end_dates)}")
-    print("첫 월말:", month_end_dates[0], "/ 마지막 월말:", month_end_dates[-1])
+    print(f"월말 실제 거래일 개수: {len(month_end_dates)}")
+    if len(month_end_dates) > 0:
+        print("첫 월말:", month_end_dates.min().date(), "/ 마지막 월말:", month_end_dates.max().date())
 
     return month_end_dates
 
 
 # -------------------------------------------------
-# 3) LABEL에 아직 없는 월말 기준일만 찾기
+# 3) label_base 생성: FEATURE_BASIC 기준
 # -------------------------------------------------
-def get_missing_month_end_dates(conn, start: str) -> list:
-    all_month_end_dates = get_month_end_trading_dates_from_db(conn, start)
+def build_label_base_easy(conn, start: str) -> pd.DataFrame:
+    """
+    FEATURE_BASIC 기준으로 label base 생성
+    - 월말 실제 거래일만 사용
+    - 해당 날짜에 상장되어 있던 종목(is_listed_on_date = 1)만 포함
+    """
+    dates = get_month_end_trading_dates(start)
+    month_end_dates = [d.date() for d in dates]
+
+    if not month_end_dates:
+        raise ValueError("월말 거래일 리스트가 비었습니다.")
+
+    placeholders = ",".join(["%s"] * len(month_end_dates))
 
     with conn.cursor() as cursor:
-        cursor.execute("SELECT DISTINCT asof_date FROM LABEL")
-        rows = cursor.fetchall()
-
-    if rows:
-        if isinstance(rows[0], dict):
-            existing_dates = {
-                pd.to_datetime(r["asof_date"]).date()
-                for r in rows
-                if r["asof_date"] is not None
-            }
-        else:
-            existing_dates = {
-                pd.to_datetime(r[0]).date()
-                for r in rows
-                if r[0] is not None
-            }
-    else:
-        existing_dates = set()
-
-    missing_dates = [d for d in all_month_end_dates if d not in existing_dates]
-
-    print("기존 LABEL 기준일 수:", len(existing_dates))
-    print("이번에 새로 추가할 기준일 수:", len(missing_dates))
-    if missing_dates:
-        print("추가 대상 기준일 범위:", min(missing_dates), "~", max(missing_dates))
-
-    return missing_dates
-
-
-# -------------------------------------------------
-# 4) 신규 기준일에 대해서만 label_base 생성
-# -------------------------------------------------
-def build_label_base_incremental(conn, start: str) -> pd.DataFrame:
-    """
-    FEATURE_BASIC 기준으로 LABEL에 아직 없는 월말 기준일만 생성
-    - 매번 전체 월말을 다시 만들지 않음
-    - 누락된 월말이 있으면 그 월말들만 보강 가능
-    """
-    missing_dates = get_missing_month_end_dates(conn, start)
-
-    if not missing_dates:
-        print("추가할 신규 월말 기준일이 없습니다.")
-        return pd.DataFrame(columns=["stock_code", "asof_date"])
-
-    placeholders = ",".join(["%s"] * len(missing_dates))
-
-    with conn.cursor() as cursor:
-        cursor.execute(
-            f"""
+        cursor.execute(f"""
             SELECT stock_code, date AS asof_date
             FROM FEATURE_BASIC
             WHERE is_listed_on_date = 1
               AND date IN ({placeholders})
-            """,
-            missing_dates,
-        )
+        """, month_end_dates)
         rows = cursor.fetchall()
 
     if not rows:
-        return pd.DataFrame(columns=["stock_code", "asof_date"])
+        return pd.DataFrame(columns=["stock_code", "asof_date", "alpha"])
 
     if isinstance(rows[0], dict):
         label = pd.DataFrame(rows)
@@ -152,46 +105,50 @@ def build_label_base_incremental(conn, start: str) -> pd.DataFrame:
 
     label["stock_code"] = label["stock_code"].astype(str).str.strip().str.zfill(6)
     label["asof_date"] = pd.to_datetime(label["asof_date"]).dt.date
+    label["alpha"] = None
+
     label = label.drop_duplicates(subset=["stock_code", "asof_date"]).reset_index(drop=True)
 
-    print("신규 label_base shape:", label.shape)
-    print("신규 label_base 종목 수:", label["stock_code"].nunique())
-    print("신규 label_base 기준일 수:", label["asof_date"].nunique())
+    print("label_base shape:", label.shape)
+    print("label_base 종목 수:", label["stock_code"].nunique())
+    print("label_base 기준일 수:", label["asof_date"].nunique())
+    print("label_base sample:")
     print(label.head())
 
     return label
 
 
 # -------------------------------------------------
-# 5) 신규 row만 LABEL에 적재
+# 4) LABEL insert (기존 alpha 보존)
 # -------------------------------------------------
 def upload_to_label(conn, df: pd.DataFrame, chunk_size: int = 10000):
     """
-    없는 (stock_code, asof_date)만 insert.
-    기존 alpha는 절대 덮어쓰지 않음.
+    LABEL(stock_code, asof_date) UNIQUE 기준으로
+    없는 row만 INSERT
+    기존 alpha는 절대 덮어쓰지 않음
     """
-    if df.empty:
-        print("업로드할 신규 LABEL 데이터가 없습니다.")
-        return
-
     sql = """
-        INSERT INTO LABEL (stock_code, asof_date)
-        VALUES (%s, %s)
-        ON DUPLICATE KEY UPDATE
-            stock_code = stock_code
+        INSERT IGNORE INTO LABEL (stock_code, asof_date, alpha)
+        VALUES (%s, %s, %s);
     """
 
     df = df.copy()
     df["asof_date"] = pd.to_datetime(df["asof_date"]).dt.date
-    data = [(r.stock_code, r.asof_date) for r in df.itertuples(index=False)]
+
+    if "alpha" not in df.columns:
+        df["alpha"] = None
+
+    data = [(r.stock_code, r.asof_date, r.alpha) for r in df.itertuples(index=False)]
 
     try:
         with conn.cursor() as cursor:
             for i in range(0, len(data), chunk_size):
                 cursor.executemany(sql, data[i:i + chunk_size])
-                print(f"LABEL 업서트 진행: {min(i + chunk_size, len(data)):,} / {len(data):,}")
+                print(f"insert 진행: {min(i + chunk_size, len(data)):,} / {len(data):,}")
+
         conn.commit()
-        print(f"✅ LABEL upsert done: {len(data):,} rows")
+        print(f"✅ LABEL insert done: {len(data):,} rows")
+
     except Exception as e:
         conn.rollback()
         print(f"(롤백됨) LABEL 업로드 중 오류 발생: {e}")
@@ -199,14 +156,15 @@ def upload_to_label(conn, df: pd.DataFrame, chunk_size: int = 10000):
 
 
 # -------------------------------------------------
-# 6) 필요한 날짜별 코스닥 전종목 종가 조회
+# 5) 필요한 날짜별 전체 종목 종가 조회
 # -------------------------------------------------
 def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3) -> pd.DataFrame:
+    """
+    필요한 날짜들에 대해 코스닥 전체 종목 종가를 조회
+    반환 컬럼: stock_code, date, close
+    """
     all_price_frames = []
     dates = sorted(pd.to_datetime(list(dates)))
-
-    if not dates:
-        return pd.DataFrame(columns=["stock_code", "date", "close"])
 
     print("가격 조회 대상 날짜 수:", len(dates))
 
@@ -222,10 +180,12 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
                 daily = stock.get_market_ohlcv_by_ticker(ymd, market="KOSDAQ")
                 if daily is not None and not daily.empty:
                     break
-                print(f"  - 재시도 {trial}/{max_retry}: 빈 데이터프레임")
+                else:
+                    print(f"  - 재시도 {trial}/{max_retry}: 빈 데이터프레임")
             except Exception as e:
                 last_err = e
                 print(f"  - 재시도 {trial}/{max_retry}: 오류 발생 -> {e}")
+
             time.sleep(sleep_sec * trial)
 
         if daily is None or daily.empty:
@@ -233,6 +193,8 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
             continue
 
         daily = daily.reset_index()
+        print("daily raw columns:", daily.columns.tolist())
+
         rename_map = {
             "티커": "stock_code",
             "ticker": "stock_code",
@@ -244,6 +206,7 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
 
         if "stock_code" not in daily.columns:
             raise ValueError(f"stock_code 컬럼을 찾을 수 없습니다. columns={daily.columns.tolist()}")
+
         if "close" not in daily.columns:
             raise ValueError(f"close 컬럼을 찾을 수 없습니다. columns={daily.columns.tolist()}")
 
@@ -252,6 +215,7 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
         daily["close"] = pd.to_numeric(daily["close"], errors="coerce")
 
         all_price_frames.append(daily[["stock_code", "date", "close"]])
+
         time.sleep(sleep_sec)
 
     if not all_price_frames:
@@ -269,79 +233,97 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
 
 
 # -------------------------------------------------
-# 7) alpha 미완성 구간만 계산 대상 추출
+# 6) alpha 실제값 채우기 (alpha IS NULL 대상만)
 # -------------------------------------------------
-def get_alpha_pending_targets(conn) -> pd.DataFrame:
+def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
     """
-    alpha가 NULL이면서, 다음 월말(next_asof_date)이 존재하는 구간만 반환.
-    마지막 월말은 다음 월말이 생기기 전까지 계산 불가이므로 제외됨.
+    아직 alpha가 없는 LABEL row만 대상으로 실제 미래 1개월 alpha 업데이트
+    alpha = 개별종목 1개월 미래수익률 - KOSDAQ 1개월 미래수익률
+
+    개선 포인트:
+    - LABEL 전체가 아니라 alpha IS NULL 대상만 계산
+    - 전체 asof_date 캘린더는 별도로 가져와 next_asof_date 매핑
+    - 필요한 날짜만 pykrx 호출
     """
+
+    # -------------------------------------------------
+    # 1) 전체 월말 캘린더 확보 (next_asof_date 매핑용)
+    # -------------------------------------------------
     with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            WITH cal AS (
-                SELECT
-                    asof_date,
-                    LEAD(asof_date) OVER (ORDER BY asof_date) AS next_asof_date
-                FROM (
-                    SELECT DISTINCT asof_date
-                    FROM LABEL
-                ) t
-            )
-            SELECT
-                l.stock_code,
-                l.asof_date,
-                cal.next_asof_date
-            FROM LABEL l
-            JOIN cal
-              ON l.asof_date = cal.asof_date
-            WHERE l.alpha IS NULL
-              AND cal.next_asof_date IS NOT NULL
-            ORDER BY l.asof_date, l.stock_code
-            """
-        )
+        cursor.execute("""
+            SELECT DISTINCT asof_date
+            FROM LABEL
+            ORDER BY asof_date
+        """)
+        cal_rows = cursor.fetchall()
+
+    if not cal_rows:
+        print("LABEL 테이블에 기준일 데이터가 없습니다.")
+        return
+
+    if isinstance(cal_rows[0], dict):
+        cal_df = pd.DataFrame(cal_rows)
+    else:
+        cal_df = pd.DataFrame(cal_rows, columns=["asof_date"])
+
+    cal_df["asof_date"] = pd.to_datetime(cal_df["asof_date"])
+    unique_dates = sorted(cal_df["asof_date"].drop_duplicates().tolist())
+
+    if len(unique_dates) < 2:
+        print("기준일이 2개 미만이라 alpha 계산이 불가능합니다.")
+        return
+
+    date_map = {unique_dates[i]: unique_dates[i + 1] for i in range(len(unique_dates) - 1)}
+
+    # -------------------------------------------------
+    # 2) 아직 alpha가 없는 대상만 조회
+    # -------------------------------------------------
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            SELECT stock_code, asof_date
+            FROM LABEL
+            WHERE alpha IS NULL
+            ORDER BY stock_code, asof_date
+        """)
         rows = cursor.fetchall()
 
     if not rows:
-        return pd.DataFrame(columns=["stock_code", "asof_date", "next_asof_date"])
+        print("이미 alpha가 전부 채워져 있습니다. 새로 계산할 row가 없습니다.")
+        return
 
     if isinstance(rows[0], dict):
         df = pd.DataFrame(rows)
     else:
-        df = pd.DataFrame(rows, columns=["stock_code", "asof_date", "next_asof_date"])
+        df = pd.DataFrame(rows, columns=["stock_code", "asof_date"])
 
     df["stock_code"] = df["stock_code"].astype(str).str.strip().str.zfill(6)
     df["asof_date"] = pd.to_datetime(df["asof_date"])
-    df["next_asof_date"] = pd.to_datetime(df["next_asof_date"])
-
-    return df
-
-
-# -------------------------------------------------
-# 8) alpha 실제값 채우기 (미완성 구간만)
-# -------------------------------------------------
-def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
-    """
-    아직 alpha가 없는 구간 중, 다음 월말이 존재하는 구간만 계산.
-    alpha = 개별종목 1개월 미래수익률 - KOSDAQ 1개월 미래수익률
-    """
-    df = get_alpha_pending_targets(conn)
-
-    if df.empty:
-        print("계산 가능한 alpha 미완성 구간이 없습니다.")
-        return
 
     print("alpha 미계산 대상 행 수:", len(df))
     print("alpha 미계산 대상 종목 수:", df["stock_code"].nunique())
     print("alpha 미계산 대상 기준일 수:", df["asof_date"].nunique())
-    print("계산 구간:", df["asof_date"].min().date(), "~", df["next_asof_date"].max().date())
 
-    needed_dates = sorted(set(df["asof_date"]).union(set(df["next_asof_date"])))
+    # -------------------------------------------------
+    # 3) next_asof_date 매핑
+    # -------------------------------------------------
+    df["next_asof_date"] = df["asof_date"].map(date_map)
 
-    start = min(needed_dates).strftime("%Y%m%d")
-    end = max(needed_dates).strftime("%Y%m%d")
+    print("next_asof_date 없는 행 수(마지막 월말):", df["next_asof_date"].isna().sum())
 
-    idx = stock.get_index_ohlcv_by_date(start, end, "2001")
+    # 마지막 월말은 다음 월말이 없으므로 제외
+    df = df.dropna(subset=["next_asof_date"]).copy()
+
+    if df.empty:
+        print("다음 월말 기준일이 없어 alpha를 계산할 수 없습니다.")
+        return
+
+    # -------------------------------------------------
+    # 4) 벤치마크 수익률 계산
+    # -------------------------------------------------
+    start = min(df["asof_date"]).strftime("%Y%m%d")
+    end = max(df["next_asof_date"]).strftime("%Y%m%d")
+
+    idx = stock.get_index_ohlcv_by_date(start, end, "2001", name_display=False)
     if idx is None or idx.empty:
         raise ValueError("KOSDAQ 지수 데이터를 가져오지 못했습니다.")
 
@@ -354,16 +336,43 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
 
     print("벤치마크 수익률 계산 가능 행 수:", df["bench_ret"].notna().sum())
 
-    price_all = get_kosdaq_prices_by_dates(needed_dates, sleep_sec=sleep_sec, max_retry=max_retry)
+    # -------------------------------------------------
+    # 5) 필요한 날짜만 조회
+    # -------------------------------------------------
+    needed_dates = sorted(set(df["asof_date"]).union(set(df["next_asof_date"])))
+    price_all = get_kosdaq_prices_by_dates(
+        needed_dates,
+        sleep_sec=sleep_sec,
+        max_retry=max_retry
+    )
+
     if price_all.empty:
         print("수집된 가격 데이터가 없습니다.")
         return
 
-    start_price = price_all.rename(columns={"date": "asof_date", "close": "stock_start"})
-    end_price = price_all.rename(columns={"date": "next_asof_date", "close": "stock_end"})
+    # 시작일 종가
+    start_price = price_all.rename(columns={
+        "date": "asof_date",
+        "close": "stock_start"
+    })
 
-    df = df.merge(start_price, on=["stock_code", "asof_date"], how="left")
-    df = df.merge(end_price, on=["stock_code", "next_asof_date"], how="left")
+    # 종료일 종가
+    end_price = price_all.rename(columns={
+        "date": "next_asof_date",
+        "close": "stock_end"
+    })
+
+    df = df.merge(
+        start_price,
+        on=["stock_code", "asof_date"],
+        how="left"
+    )
+
+    df = df.merge(
+        end_price,
+        on=["stock_code", "next_asof_date"],
+        how="left"
+    )
 
     before_drop = len(df)
     df = df.dropna(subset=["stock_start", "stock_end", "bench_ret"]).copy()
@@ -375,6 +384,9 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
         print("계산 가능한 alpha가 없습니다.")
         return
 
+    # -------------------------------------------------
+    # 6) alpha 계산
+    # -------------------------------------------------
     df["stock_ret"] = (df["stock_end"] / df["stock_start"]) - 1
     df["alpha"] = df["stock_ret"] - df["bench_ret"]
 
@@ -383,8 +395,12 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
     df_alpha["alpha"] = pd.to_numeric(df_alpha["alpha"], errors="coerce")
 
     print("계산된 alpha 행 수:", len(df_alpha))
+    print("alpha sample:")
     print(df_alpha.head())
 
+    # -------------------------------------------------
+    # 7) LABEL 업데이트
+    # -------------------------------------------------
     update_sql = """
         UPDATE LABEL
         SET alpha = %s
@@ -393,7 +409,10 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
           AND alpha IS NULL
     """
 
-    data = [(r.alpha, r.stock_code, r.asof_date) for r in df_alpha.itertuples(index=False)]
+    data = [
+        (r.alpha, r.stock_code, r.asof_date)
+        for r in df_alpha.itertuples(index=False)
+    ]
 
     try:
         with conn.cursor() as cursor:
@@ -401,8 +420,10 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
             for i in range(0, len(data), batch_size):
                 cursor.executemany(update_sql, data[i:i + batch_size])
                 print(f"alpha 업데이트 진행: {min(i + batch_size, len(data)):,} / {len(data):,}")
+
         conn.commit()
         print(f"✅ alpha 업데이트 완료: {len(data):,} rows")
+
     except Exception as e:
         conn.rollback()
         print(f"(롤백됨) alpha 업데이트 중 오류 발생: {e}")
@@ -410,7 +431,7 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
 
 
 # -------------------------------------------------
-# 9) sanity check
+# 7) sanity check
 # -------------------------------------------------
 def sanity_check_alpha(conn):
     with conn.cursor() as cursor:
@@ -444,32 +465,40 @@ def sanity_check_alpha(conn):
 
 
 # -------------------------------------------------
-# 10) MAIN
+# 8) MAIN
 # -------------------------------------------------
 def main():
-    print("[1] DB 연결 시작")
-    conn = get_connection()
+    load_dotenv()
 
+    krx_id = os.getenv("ID")
+    krx_pw = os.getenv("PW")
+
+    if not krx_id or not krx_pw:
+        raise ValueError("환경변수 ID/PW가 비어있습니다. .env 확인하세요.")
+
+    if login_krx(krx_id, krx_pw):
+        print("KRX 로그인 성공!")
+    else:
+        raise RuntimeError("KRX 로그인 실패")
+
+    conn = get_connection()
     try:
-        print("[2] create_label 시작")
         create_label(conn)
 
-        print("[3] build_label_base_incremental 시작")
-        label_base = build_label_base_incremental(conn, start="20151001")
+        label_base = build_label_base_easy(conn, start="20151001")
+        if label_base.empty:
+            raise ValueError("label_base가 비었습니다. FEATURE_BASIC / 월말거래일 로직 확인")
 
-        print("[4] upload_to_label 시작")
         upload_to_label(conn, label_base)
 
-        print("[5] fill_alpha_to_label 시작")
+        # alpha가 NULL인 것만 계산
         fill_alpha_to_label(conn, sleep_sec=0.3, max_retry=3)
 
-        print("[6] sanity_check_alpha 시작")
+        # sanity check
         sanity_check_alpha(conn)
 
-        print("[7] 전체 완료")
     finally:
         conn.close()
-        print("[8] DB 연결 종료")
 
 
 if __name__ == "__main__":
