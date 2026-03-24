@@ -327,10 +327,19 @@ def overview(request, stock_code=None):
         latest_label.alpha = float(latest_label.alpha) * 100
     
     # LABEL 테이블에서 기준일 보여주기 위해 필요한 부분
-    max_label = Label.objects.filter(
-        stock_code=stock_code
-    ).order_by('-asof_date').first()
-    max_asof_date = max_label.asof_date if max_label else None
+    max_asof_date = None
+
+    if latest_label:
+        label_dates = list(
+            Label.objects.filter(stock_code=stock_code)
+            .order_by('asof_date')
+            .values_list('asof_date', flat=True)
+        )
+        for idx, label_date in enumerate(label_dates):
+            if label_date == latest_label.asof_date:
+                next_idx = idx + 1
+                max_asof_date = label_dates[next_idx] if next_idx < len(label_dates) else None
+                break
 
     # COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
     latest_overlap = CompanyStock.objects.filter(
