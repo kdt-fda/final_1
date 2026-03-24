@@ -21,7 +21,8 @@ from common.setting import login_krx, get_connection
 def create_label(conn):
     """
     LABEL: 종목(stock_code) x 기준일(asof_date) 별 alpha 저장
-    - (stock_code, asof_date) UNIQUE 로 UPSERT 기준 잡음
+    - asof_date는 '달력 월말'
+    - (stock_code, asof_date) UNIQUE 기준
     """
     try:
         with conn.cursor() as cursor:
@@ -43,9 +44,12 @@ def create_label(conn):
 
 
 # -------------------------------------------------
-# 2) 월별 "마지막 거래일" 리스트 생성 (KOSDAQ index 기반)
+# 2) KOSDAQ 거래일력 확보
 # -------------------------------------------------
-def get_month_end_trading_dates(start: str) -> pd.DatetimeIndex:
+def get_kosdaq_trading_calendar(start: str) -> pd.DatetimeIndex:
+    """
+    start ~ today 까지의 KOSDAQ 실제 거래일 목록
+    """
     today = datetime.today().strftime("%Y%m%d")
 
     idx = stock.get_index_ohlcv_by_date(start, today, "2001", name_display=False)
@@ -53,57 +57,117 @@ def get_month_end_trading_dates(start: str) -> pd.DatetimeIndex:
         raise ValueError("KOSDAQ 지수 데이터가 비어 있습니다.")
 
     idx.index = pd.to_datetime(idx.index)
+    trading_dates = pd.DatetimeIndex(idx.index.unique()).sort_values()
 
-    # 월별 마지막 "실제 거래일"
-    month_end = (
-        idx.groupby(idx.index.to_period("M"))
-           .apply(lambda x: x.index.max())
-    )
+    print(f"KOSDAQ 거래일 수: {len(trading_dates)}")
+    print("첫 거래일:", trading_dates.min().date(), "/ 마지막 거래일:", trading_dates.max().date())
 
-    month_end_dates = pd.DatetimeIndex(pd.to_datetime(month_end.values))
-
-    print(f"월말 실제 거래일 개수: {len(month_end_dates)}")
-    if len(month_end_dates) > 0:
-        print("첫 월말:", month_end_dates.min().date(), "/ 마지막 월말:", month_end_dates.max().date())
-
-    return month_end_dates
+    return trading_dates
 
 
 # -------------------------------------------------
-# 3) label_base 생성: FEATURE_BASIC 기준
+# 3) 월말 캘린더 생성
+# -------------------------------------------------
+def build_month_end_reference_calendar(start: str) -> pd.DataFrame:
+    """
+    asof_date는 '달력 월말'
+    ref_trade_date는 '해당 월말까지의 최신 거래일'
+
+    예:
+    - asof_date = 2026-03-31
+    - 오늘이 2026-03-23이면
+    - ref_trade_date = 2026-03-23
+
+    단, alpha 계산 시에는 다음 asof_date가 아직 미래이면 계산하지 않음.
+    """
+    trading_dates = get_kosdaq_trading_calendar(start)
+    today_ts = pd.Timestamp(datetime.today().date())
+
+    start_ts = pd.to_datetime(start)
+    start_month_end = start_ts.to_period("M").to_timestamp("M")
+    current_month_end = today_ts.to_period("M").to_timestamp("M")
+
+    month_ends = pd.date_range(start=start_month_end, end=current_month_end, freq="ME")
+
+    if len(month_ends) == 0:
+        raise ValueError("생성된 월말 캘린더가 없습니다.")
+
+    ref_rows = []
+
+    for asof_ts in month_ends:
+        cutoff = min(asof_ts, today_ts)
+
+        eligible = trading_dates[trading_dates <= cutoff]
+        if len(eligible) == 0:
+            print(f"[스킵] {asof_ts.date()} 이전 거래일이 없어 제외")
+            continue
+
+        ref_trade_date = eligible.max()
+
+        ref_rows.append({
+            "asof_date": asof_ts.normalize(),
+            "ref_trade_date": pd.Timestamp(ref_trade_date).normalize()
+        })
+
+    cal = pd.DataFrame(ref_rows)
+
+    if cal.empty:
+        raise ValueError("월말 참조 캘린더가 비었습니다.")
+
+    cal["asof_date"] = pd.to_datetime(cal["asof_date"])
+    cal["ref_trade_date"] = pd.to_datetime(cal["ref_trade_date"])
+
+    print("월말 캘린더 개수:", len(cal))
+    print("첫 월말:", cal["asof_date"].min().date(), "/ 마지막 월말:", cal["asof_date"].max().date())
+    print("sample:")
+    print(cal.head())
+
+    return cal
+
+
+# -------------------------------------------------
+# 4) label_base 생성: FEATURE_BASIC 기준
 # -------------------------------------------------
 def build_label_base_easy(conn, start: str) -> pd.DataFrame:
     """
     FEATURE_BASIC 기준으로 label base 생성
-    - 월말 실제 거래일만 사용
-    - 해당 날짜에 상장되어 있던 종목(is_listed_on_date = 1)만 포함
+    - LABEL.asof_date는 무조건 '달력 월말'
+    - 실제 종목 포함 여부는 ref_trade_date 기준
+    - 해당 ref_trade_date에 상장되어 있던 종목(is_listed_on_date = 1)만 포함
     """
-    dates = get_month_end_trading_dates(start)
-    month_end_dates = [d.date() for d in dates]
+    cal = build_month_end_reference_calendar(start)
 
-    if not month_end_dates:
-        raise ValueError("월말 거래일 리스트가 비었습니다.")
+    ref_dates = cal["ref_trade_date"].dt.date.tolist()
+    if not ref_dates:
+        raise ValueError("ref_trade_date 리스트가 비었습니다.")
 
-    placeholders = ",".join(["%s"] * len(month_end_dates))
+    placeholders = ",".join(["%s"] * len(ref_dates))
 
     with conn.cursor() as cursor:
         cursor.execute(f"""
-            SELECT stock_code, date AS asof_date
+            SELECT stock_code, date AS ref_trade_date
             FROM FEATURE_BASIC
             WHERE is_listed_on_date = 1
               AND date IN ({placeholders})
-        """, month_end_dates)
+        """, ref_dates)
         rows = cursor.fetchall()
 
     if not rows:
         return pd.DataFrame(columns=["stock_code", "asof_date", "alpha"])
 
     if isinstance(rows[0], dict):
-        label = pd.DataFrame(rows)
+        base = pd.DataFrame(rows)
     else:
-        label = pd.DataFrame(rows, columns=["stock_code", "asof_date"])
+        base = pd.DataFrame(rows, columns=["stock_code", "ref_trade_date"])
 
-    label["stock_code"] = label["stock_code"].astype(str).str.strip().str.zfill(6)
+    base["stock_code"] = base["stock_code"].astype(str).str.strip().str.zfill(6)
+    base["ref_trade_date"] = pd.to_datetime(base["ref_trade_date"])
+
+    # ref_trade_date -> asof_date 매핑
+    ref_to_asof = cal.copy()
+    merged = base.merge(ref_to_asof, on="ref_trade_date", how="left")
+
+    label = merged[["stock_code", "asof_date"]].copy()
     label["asof_date"] = pd.to_datetime(label["asof_date"]).dt.date
     label["alpha"] = None
 
@@ -119,17 +183,17 @@ def build_label_base_easy(conn, start: str) -> pd.DataFrame:
 
 
 # -------------------------------------------------
-# 4) LABEL 업서트
+# 5) LABEL insert (기존 alpha 보존)
 # -------------------------------------------------
 def upload_to_label(conn, df: pd.DataFrame, chunk_size: int = 10000):
     """
-    LABEL(stock_code, asof_date) UNIQUE 기준으로 UPSERT
+    LABEL(stock_code, asof_date) UNIQUE 기준으로
+    없는 row만 INSERT
+    기존 alpha는 절대 덮어쓰지 않음
     """
     sql = """
-        INSERT INTO LABEL (stock_code, asof_date, alpha)
-        VALUES (%s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            alpha = VALUES(alpha);
+        INSERT IGNORE INTO LABEL (stock_code, asof_date, alpha)
+        VALUES (%s, %s, %s);
     """
 
     df = df.copy()
@@ -144,10 +208,10 @@ def upload_to_label(conn, df: pd.DataFrame, chunk_size: int = 10000):
         with conn.cursor() as cursor:
             for i in range(0, len(data), chunk_size):
                 cursor.executemany(sql, data[i:i + chunk_size])
-                print(f"업서트 진행: {min(i + chunk_size, len(data)):,} / {len(data):,}")
+                print(f"insert 진행: {min(i + chunk_size, len(data)):,} / {len(data):,}")
 
         conn.commit()
-        print(f"✅ LABEL upsert done: {len(data):,} rows")
+        print(f"✅ LABEL insert done: {len(data):,} rows")
 
     except Exception as e:
         conn.rollback()
@@ -156,7 +220,7 @@ def upload_to_label(conn, df: pd.DataFrame, chunk_size: int = 10000):
 
 
 # -------------------------------------------------
-# 5) 필요한 날짜별 전체 종목 종가 조회
+# 6) 필요한 날짜별 전체 종목 종가 조회
 # -------------------------------------------------
 def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3) -> pd.DataFrame:
     """
@@ -164,7 +228,7 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
     반환 컬럼: stock_code, date, close
     """
     all_price_frames = []
-    dates = sorted(pd.to_datetime(list(dates)))
+    dates = sorted(pd.to_datetime(list(dates)).unique())
 
     print("가격 조회 대상 날짜 수:", len(dates))
 
@@ -193,7 +257,6 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
             continue
 
         daily = daily.reset_index()
-        print("daily raw columns:", daily.columns.tolist())
 
         rename_map = {
             "티커": "stock_code",
@@ -231,22 +294,26 @@ def get_kosdaq_prices_by_dates(dates, sleep_sec: float = 0.3, max_retry: int = 3
 
     return price_all
 
+
 # -------------------------------------------------
-# 6) alpha 실제값 채우기 (alpha IS NULL 대상만)
+# 7) alpha 실제값 채우기 (alpha IS NULL 대상만)
 # -------------------------------------------------
-def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
+def fill_alpha_to_label(conn, start: str = "20151001", sleep_sec: float = 0.3, max_retry: int = 3):
     """
     아직 alpha가 없는 LABEL row만 대상으로 실제 미래 1개월 alpha 업데이트
     alpha = 개별종목 1개월 미래수익률 - KOSDAQ 1개월 미래수익률
 
-    개선 포인트:
-    - LABEL 전체가 아니라 alpha IS NULL 대상만 계산
-    - 전체 asof_date 캘린더는 별도로 가져와 next_asof_date 매핑
-    - 필요한 날짜만 pykrx 호출
+    핵심 규칙:
+    - LABEL.asof_date는 달력 월말
+    - 실제 수익률 계산은 ref_trade_date 기준
+    - next_asof_date가 '오늘 기준 아직 닫히지 않은 월말'이면 계산하지 않음
+      -> 마지막 월말 alpha는 NULL 유지
     """
 
+    today_date = datetime.today().date()
+
     # -------------------------------------------------
-    # 1) 전체 월말 캘린더 확보 (next_asof_date 매핑용)
+    # 1) LABEL 전체 월말 캘린더 확보
     # -------------------------------------------------
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -261,21 +328,36 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
         return
 
     if isinstance(cal_rows[0], dict):
-        cal_df = pd.DataFrame(cal_rows)
+        label_cal = pd.DataFrame(cal_rows)
     else:
-        cal_df = pd.DataFrame(cal_rows, columns=["asof_date"])
+        label_cal = pd.DataFrame(cal_rows, columns=["asof_date"])
 
-    cal_df["asof_date"] = pd.to_datetime(cal_df["asof_date"])
-    unique_dates = sorted(cal_df["asof_date"].drop_duplicates().tolist())
+    label_cal["asof_date"] = pd.to_datetime(label_cal["asof_date"]).dt.normalize()
+    unique_asof = sorted(label_cal["asof_date"].drop_duplicates().tolist())
 
-    if len(unique_dates) < 2:
+    if len(unique_asof) < 2:
         print("기준일이 2개 미만이라 alpha 계산이 불가능합니다.")
         return
 
-    date_map = {unique_dates[i]: unique_dates[i + 1] for i in range(len(unique_dates) - 1)}
+    # -------------------------------------------------
+    # 2) asof_date -> ref_trade_date 매핑 캘린더 생성
+    # -------------------------------------------------
+    ref_cal = build_month_end_reference_calendar(start)
+    ref_cal["asof_date"] = pd.to_datetime(ref_cal["asof_date"]).dt.normalize()
+    ref_cal["ref_trade_date"] = pd.to_datetime(ref_cal["ref_trade_date"]).dt.normalize()
+
+    ref_map_df = pd.DataFrame({"asof_date": unique_asof})
+    ref_map_df = ref_map_df.merge(ref_cal, on="asof_date", how="left")
+
+    if ref_map_df["ref_trade_date"].isna().any():
+        missing = ref_map_df.loc[ref_map_df["ref_trade_date"].isna(), "asof_date"].dt.date.tolist()
+        raise ValueError(f"ref_trade_date 매핑 실패 asof_date: {missing[:10]}")
+
+    # next_asof_date 매핑
+    date_map = {unique_asof[i]: unique_asof[i + 1] for i in range(len(unique_asof) - 1)}
 
     # -------------------------------------------------
-    # 2) 아직 alpha가 없는 대상만 조회
+    # 3) 아직 alpha가 없는 대상만 조회
     # -------------------------------------------------
     with conn.cursor() as cursor:
         cursor.execute("""
@@ -296,49 +378,73 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
         df = pd.DataFrame(rows, columns=["stock_code", "asof_date"])
 
     df["stock_code"] = df["stock_code"].astype(str).str.strip().str.zfill(6)
-    df["asof_date"] = pd.to_datetime(df["asof_date"])
+    df["asof_date"] = pd.to_datetime(df["asof_date"]).dt.normalize()
 
     print("alpha 미계산 대상 행 수:", len(df))
     print("alpha 미계산 대상 종목 수:", df["stock_code"].nunique())
     print("alpha 미계산 대상 기준일 수:", df["asof_date"].nunique())
 
     # -------------------------------------------------
-    # 3) next_asof_date 매핑
+    # 4) next_asof_date / ref_trade_date / next_ref_trade_date 매핑
     # -------------------------------------------------
     df["next_asof_date"] = df["asof_date"].map(date_map)
 
+    df = df.merge(
+        ref_map_df.rename(columns={"ref_trade_date": "ref_trade_date"}),
+        on="asof_date",
+        how="left"
+    )
+
+    next_ref_map_df = ref_map_df.rename(columns={
+        "asof_date": "next_asof_date",
+        "ref_trade_date": "next_ref_trade_date"
+    })
+
+    df = df.merge(
+        next_ref_map_df,
+        on="next_asof_date",
+        how="left"
+    )
+
     print("next_asof_date 없는 행 수(마지막 월말):", df["next_asof_date"].isna().sum())
 
-    # 마지막 월말은 다음 월말이 없으므로 제외
-    df = df.dropna(subset=["next_asof_date"]).copy()
+    # -------------------------------------------------
+    # 5) '다음 월말이 아직 안 닫힌' row 제외
+    # -------------------------------------------------
+    # 예: 오늘이 2026-03-23이면 next_asof_date=2026-03-31 은 아직 미래이므로 계산 제외
+    before_filter = len(df)
+    df = df[df["next_asof_date"].notna()].copy()
+    df = df[df["next_asof_date"].dt.date <= today_date].copy()
+
+    print("다음 월말 미도래로 제외된 행 수:", before_filter - len(df))
 
     if df.empty:
-        print("다음 월말 기준일이 없어 alpha를 계산할 수 없습니다.")
+        print("오늘 기준 계산 가능한 alpha가 없습니다. 마지막 월말은 NULL 유지됩니다.")
         return
 
     # -------------------------------------------------
-    # 4) 벤치마크 수익률 계산
+    # 6) 벤치마크 수익률 계산 (ref_trade_date 기준)
     # -------------------------------------------------
-    start = min(df["asof_date"]).strftime("%Y%m%d")
-    end = max(df["next_asof_date"]).strftime("%Y%m%d")
+    start_idx = df["ref_trade_date"].min().strftime("%Y%m%d")
+    end_idx = df["next_ref_trade_date"].max().strftime("%Y%m%d")
 
-    idx = stock.get_index_ohlcv_by_date(start, end, "2001", name_display=False)
+    idx = stock.get_index_ohlcv_by_date(start_idx, end_idx, "2001", name_display=False)
     if idx is None or idx.empty:
         raise ValueError("KOSDAQ 지수 데이터를 가져오지 못했습니다.")
 
     idx.index = pd.to_datetime(idx.index)
     idx_close_map = idx["종가"].to_dict()
 
-    df["bench_start"] = df["asof_date"].map(idx_close_map)
-    df["bench_end"] = df["next_asof_date"].map(idx_close_map)
+    df["bench_start"] = df["ref_trade_date"].map(idx_close_map)
+    df["bench_end"] = df["next_ref_trade_date"].map(idx_close_map)
     df["bench_ret"] = (df["bench_end"] / df["bench_start"]) - 1
 
     print("벤치마크 수익률 계산 가능 행 수:", df["bench_ret"].notna().sum())
 
     # -------------------------------------------------
-    # 5) 필요한 날짜만 조회
+    # 7) 필요한 ref_trade_date 가격만 조회
     # -------------------------------------------------
-    needed_dates = sorted(set(df["asof_date"]).union(set(df["next_asof_date"])))
+    needed_dates = sorted(set(df["ref_trade_date"]).union(set(df["next_ref_trade_date"])))
     price_all = get_kosdaq_prices_by_dates(
         needed_dates,
         sleep_sec=sleep_sec,
@@ -351,25 +457,25 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
 
     # 시작일 종가
     start_price = price_all.rename(columns={
-        "date": "asof_date",
+        "date": "ref_trade_date",
         "close": "stock_start"
     })
 
     # 종료일 종가
     end_price = price_all.rename(columns={
-        "date": "next_asof_date",
+        "date": "next_ref_trade_date",
         "close": "stock_end"
     })
 
     df = df.merge(
         start_price,
-        on=["stock_code", "asof_date"],
+        on=["stock_code", "ref_trade_date"],
         how="left"
     )
 
     df = df.merge(
         end_price,
-        on=["stock_code", "next_asof_date"],
+        on=["stock_code", "next_ref_trade_date"],
         how="left"
     )
 
@@ -384,7 +490,7 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
         return
 
     # -------------------------------------------------
-    # 6) alpha 계산
+    # 8) alpha 계산
     # -------------------------------------------------
     df["stock_ret"] = (df["stock_end"] / df["stock_start"]) - 1
     df["alpha"] = df["stock_ret"] - df["bench_ret"]
@@ -398,7 +504,7 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
     print(df_alpha.head())
 
     # -------------------------------------------------
-    # 7) LABEL 업데이트
+    # 9) LABEL 업데이트
     # -------------------------------------------------
     update_sql = """
         UPDATE LABEL
@@ -430,7 +536,7 @@ def fill_alpha_to_label(conn, sleep_sec: float = 0.3, max_retry: int = 3):
 
 
 # -------------------------------------------------
-# 7) sanity check
+# 8) sanity check
 # -------------------------------------------------
 def sanity_check_alpha(conn):
     with conn.cursor() as cursor:
@@ -449,22 +555,30 @@ def sanity_check_alpha(conn):
         cursor.execute("SELECT COUNT(DISTINCT asof_date) AS cnt FROM LABEL")
         date_cnt = cursor.fetchone()
 
+        cursor.execute("""
+            SELECT MIN(asof_date) AS min_date, MAX(asof_date) AS max_date
+            FROM LABEL
+        """)
+        minmax = cursor.fetchone()
+
     if isinstance(total_cnt, dict):
         print("LABEL 전체 행 수:", total_cnt["cnt"])
         print("LABEL alpha 존재 행 수:", alpha_cnt["cnt"])
         print("LABEL alpha NULL 행 수:", alpha_null_cnt["cnt"])
         print("LABEL 종목 수:", stock_cnt["cnt"])
         print("LABEL 기준일 수:", date_cnt["cnt"])
+        print("LABEL 최소/최대 기준일:", minmax["min_date"], "/", minmax["max_date"])
     else:
         print("LABEL 전체 행 수:", total_cnt[0])
         print("LABEL alpha 존재 행 수:", alpha_cnt[0])
         print("LABEL alpha NULL 행 수:", alpha_null_cnt[0])
         print("LABEL 종목 수:", stock_cnt[0])
         print("LABEL 기준일 수:", date_cnt[0])
+        print("LABEL 최소/최대 기준일:", minmax[0], "/", minmax[1])
 
 
 # -------------------------------------------------
-# 8) MAIN
+# 9) MAIN
 # -------------------------------------------------
 def main():
     load_dotenv()
@@ -486,12 +600,12 @@ def main():
 
         label_base = build_label_base_easy(conn, start="20151001")
         if label_base.empty:
-            raise ValueError("label_base가 비었습니다. FEATURE_BASIC / 월말거래일 로직 확인")
+            raise ValueError("label_base가 비었습니다. FEATURE_BASIC / 월말 캘린더 로직 확인")
 
         upload_to_label(conn, label_base)
 
         # alpha가 NULL인 것만 계산
-        fill_alpha_to_label(conn, sleep_sec=0.3, max_retry=3)
+        fill_alpha_to_label(conn, start="20151001", sleep_sec=0.3, max_retry=3)
 
         # sanity check
         sanity_check_alpha(conn)

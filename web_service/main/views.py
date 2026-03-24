@@ -9,10 +9,10 @@ import json
 from functools import lru_cache
 from pathlib import Path
 import pandas as pd
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Q, Subquery
 from django.db.utils import OperationalError, ProgrammingError
 
-from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex
+from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex, Label
 
 
 COMPETITIVENESS_METRICS = [
@@ -171,76 +171,33 @@ def home(request):
 
 def search(request):
     query = request.GET.get('q', '').strip()
-    
-    if query:
-        if len(query) == 6 and query.isdigit():
-            exact_company = Basic.objects.filter(stock_code=query, is_active=True).first()
-            if exact_company:
-                return redirect('overview', stock_code=exact_company.stock_code)
 
-        exact_name_results = Basic.objects.filter(corp_name__iexact=query, is_active=True)
+    results = Basic.objects.none()
+
+    if query:
+        active_companies = Basic.objects.filter(is_active=True)
+
+        exact_company = active_companies.filter(stock_code__iexact=query).first()
+        if exact_company:
+            return redirect('overview', stock_code=exact_company.stock_code)
+
+        exact_name_results = active_companies.filter(corp_name__iexact=query)
         if exact_name_results.count() == 1:
             return redirect('overview', stock_code=exact_name_results.first().stock_code)
 
-        # 기업명에 검색어가 포함된 데이터를 찾음. 여기서 활성화 된 애만 검색 가능함
+        # 기업명 또는 종목코드에 검색어가 포함된 데이터를 찾음. 여기서 활성화 된 애만 검색 가능함
         # 여기서 원하는 속성만 가져오려면 뒤에 .values('corp_name', 'stock_code') 처럼 쓰면 됨
-        results = Basic.objects.filter(corp_name__icontains=query, is_active=True) # corp_name에서 대소문자 구분 없이, query가 포함되고, is_active=True인 데이터 가져옴
-        
+        results = active_companies.filter(
+            Q(corp_name__icontains=query) | Q(stock_code__icontains=query)
+        ).order_by('corp_name') # corp_name/stock_code에서 대소문자 구분 없이, query가 포함되고, is_active=True인 데이터 가져옴
+
         # 중복이 없으므로, 결과가 딱 1개라면 바로 요약 페이지로 이동
         if results.count() == 1:
             return redirect('overview', stock_code=results.first().stock_code)
-    else:
-        results = []
 
     # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줌
     return render(request, 'search.html', {'results': results, 'query': query})
 
-
-def normalize_product_ratio_data(raw_ratio_data):
-    if not isinstance(raw_ratio_data, list):
-        return []
-
-    normalized_ratio_data = []
-    total_ratio = Decimal('0')
-    other_item = None
-
-    for item in raw_ratio_data:
-        if not isinstance(item, dict):
-            continue
-
-        product_service = str(item.get('product_service') or '').strip()
-        if not product_service:
-            continue
-
-        try:
-            ratio_value = Decimal(str(item.get('ratio')))
-        except (InvalidOperation, TypeError, ValueError):
-            continue
-
-        normalized_item = dict(item)
-        normalized_item['product_service'] = product_service
-        normalized_item['ratio'] = float(ratio_value)
-        normalized_ratio_data.append(normalized_item)
-        total_ratio += ratio_value
-
-        if product_service == '기타':
-            other_item = normalized_item
-
-    if normalized_ratio_data and total_ratio < Decimal('99'):
-        remaining_ratio = (Decimal('100') - total_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        if remaining_ratio > 0:
-            if other_item:
-                updated_ratio = Decimal(str(other_item['ratio'])) + remaining_ratio
-                other_item['ratio'] = float(updated_ratio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
-            else:
-                normalized_ratio_data.append({
-                    'product_service': '기타',
-                    'revenue': None,
-                    'ratio': float(remaining_ratio),
-                })
-
-    return normalized_ratio_data
 
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함
@@ -248,6 +205,52 @@ def ai_page(request, stock_code):
     # 데이터 유효성 검사 (None, 'None', '[]' 등 체크)
     def is_invalid(value):
         return value in [None, 'None', '[]', 'NULL', [], 'null', '', 'NULL']
+
+    def normalize_product_ratio_data(raw_ratio_data):
+        if not isinstance(raw_ratio_data, list):
+            return []
+
+        normalized_ratio_data = []
+        total_ratio = Decimal('0')
+        other_item = None
+
+        for item in raw_ratio_data:
+            if not isinstance(item, dict):
+                continue
+
+            product_service = str(item.get('product_service') or '').strip()
+            if not product_service:
+                continue
+
+            try:
+                ratio_value = Decimal(str(item.get('ratio')))
+            except (InvalidOperation, TypeError, ValueError):
+                continue
+
+            normalized_item = dict(item)
+            normalized_item['product_service'] = product_service
+            normalized_item['ratio'] = float(ratio_value)
+            normalized_ratio_data.append(normalized_item)
+            total_ratio += ratio_value
+
+            if product_service == '기타':
+                other_item = normalized_item
+
+        if normalized_ratio_data and total_ratio < Decimal('99'):
+            remaining_ratio = (Decimal('100') - total_ratio).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            if remaining_ratio > 0:
+                if other_item:
+                    updated_ratio = Decimal(str(other_item['ratio'])) + remaining_ratio
+                    other_item['ratio'] = float(updated_ratio.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+                else:
+                    normalized_ratio_data.append({
+                        'product_service': '기타',
+                        'revenue': None,
+                        'ratio': float(remaining_ratio),
+                    })
+
+        return normalized_ratio_data
     
     # 최신 보고서 날짜순(-report_date)으로 정렬하여 해당 종목의 모든 리포트를 가져옴
     reports = Report.objects.filter(stock_code=stock_code).order_by('-report_date')
@@ -312,6 +315,22 @@ def ai_page(request, stock_code):
 
 def overview(request, stock_code=None):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code)
+    
+    # LABEL 테이블에서 알파값이 null이 아닌 제일 최신 asof_date
+    latest_label = Label.objects.filter(
+        stock_code=stock_code,
+        alpha__isnull=False
+    ).order_by('-asof_date').first()
+    
+    # 알파값에 100 곱하기
+    if latest_label and latest_label.alpha is not None:
+        latest_label.alpha = float(latest_label.alpha) * 100
+    
+    # LABEL 테이블에서 기준일 보여주기 위해 필요한 부분
+    max_label = Label.objects.filter(
+        stock_code=stock_code
+    ).order_by('-asof_date').first()
+    max_asof_date = max_label.asof_date if max_label else None
 
     # COMPANY_STOCK과 MARKET_INDEX의 reference_date, date 교집합 중 가장 최신 날짜 찾기
     latest_overlap = CompanyStock.objects.filter(
@@ -378,6 +397,8 @@ def overview(request, stock_code=None):
         'chart_data_json': chart_data,
         'price_unit_label': get_price_unit_label(company_currency),
         'latest_price_date': latest_date,
+        'latest_label': latest_label,
+        'max_asof_date': max_asof_date,
     }
     return render(request, 'overview.html', context)
 

@@ -99,32 +99,6 @@ class CompanyStock(models.Model):
         unique_together = (('stock_code', 'reference_date'),)
 
 
-class CorpCodeMap(models.Model):
-    stock_code = models.CharField(primary_key=True, max_length=10)
-    corp_code = models.CharField(max_length=15)
-    updated_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'CORP_CODE_MAP'
-
-
-class DartFin(models.Model):
-    corp_code = models.CharField(max_length=15)
-    biz_year = models.IntegerField()
-    reprt_code = models.CharField(max_length=10)
-    revenue = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
-    op_profit = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
-    net_income = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
-    equity = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
-    disclosure_date = models.DateField(blank=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = 'DART_FIN'
-        unique_together = (('corp_code', 'biz_year', 'reprt_code'),)
-
-
 class FeatureBasic(models.Model):
     pk = models.CompositePrimaryKey('stock_code', 'date')
     stock_code = models.CharField(max_length=10, db_comment='stock code')
@@ -144,7 +118,7 @@ class FeatureRaw(models.Model):
     # stock_code랑 date 복합 외래키는 장고에서 지원 안한다고 해서 일단 일반 필드로 교체
     stock_code = models.CharField(max_length=10, db_column='stock_code')
     date = models.DateField(db_column='date')
-    
+        
     close = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     trading_value = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
     foreign_netbuy_value = models.DecimalField(max_digits=24, decimal_places=6, blank=True, null=True)
@@ -156,7 +130,6 @@ class FeatureRaw(models.Model):
     class Meta:
         managed = False
         db_table = 'FEATURE_RAW'
-        unique_together = (('stock_code', 'date'),)
 
 
 class FeatureRawD(models.Model):

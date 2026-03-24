@@ -97,6 +97,74 @@
             margin-top: 20px;
         } /* 차트가 들어갈 박스 크기랑 위쪽 여백 지정 */
 
+        .overview-card {
+            padding: 34px 44px;
+        }
+
+        .overview-summary {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 28px 56px;
+            align-items: center;
+        }
+
+        .overview-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            min-height: 148px;
+        }
+
+        .overview-metric-title {
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #111;
+            line-height: 1.3;
+            letter-spacing: -0.03em;
+        }
+
+        .overview-metric-date {
+            margin-top: 4px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: #808080;
+            line-height: 1.4;
+        }
+
+        .overview-metric-value {
+            margin-top: 18px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #111;
+            line-height: 1.1;
+            letter-spacing: -0.04em;
+        }
+
+        .overview-metric-value.positive { color: #e60000; }
+        .overview-metric-value.negative { color: #3498db; }
+
+        @media (max-width: 900px) {
+            .overview-card {
+                padding: 28px 24px;
+            }
+
+            .overview-summary {
+                grid-template-columns: 1fr;
+                gap: 24px;
+            }
+
+            .overview-metric {
+                min-height: auto;
+            }
+
+            .overview-metric + .overview-metric {
+                padding-top: 24px;
+                border-top: 1px solid #f0f0f0;
+            }
+        }
+
     </style>
 </head>
 
@@ -120,40 +188,37 @@
             <div class="industry-text">{{ company.ind_code.ind_name }}({{ company.ind_code.ind_code }})</div>
         </section>
         
-        <!-- 은영님 수정하실 부분 -->
         <section class="section-block">
-            <h2 class="card-title">투자 의견</h2>
-            <div class="card" style="padding: 40px 20px;">
-                <div style="display: flex; justify-content: center; align-items: center; gap: 80px;">
-                    
-                    <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-                        <span style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 10px;">
-                            <span style="color: #3498db; font-weight: 800;">Open-Q</span> 종목 분석 결과
-                        </span>
-                        <span style="font-size: 2.5rem; font-weight: 900; color: #ff4757; letter-spacing: 2px; line-height: 1;">
-                            BUY
-                        </span>
+            <h2 class="card-title">최근 성과</h2> <!-- 최근 성과 부분 -->
+            <div class="card overview-card">
+                <div class="overview-summary">
+                    <div class="overview-metric">
+                        <div class="overview-metric-title">KOSDAQ 초과 수익률</div>
+                        {% if latest_label %}
+                            <div class="overview-metric-date">({{ latest_label.asof_date|date:"Y.m.d" }}-{{ max_asof_date|date:"Y.m.d" }})</div>
+                            <div class="overview-metric-value {% if latest_label.alpha > 0 %}positive{% elif latest_label.alpha < 0 %}negative{% endif %}">
+                                {% if latest_label.alpha > 0 %}+{% endif %}{{ latest_label.alpha|floatformat:2 }}%
+                            </div>
+                        {% else %}
+                            <div class="overview-metric-date">(-)</div>
+                            <div class="overview-metric-value">-</div>
+                        {% endif %}
                     </div>
 
-                    <div style="width: 1px; height: 70px; background-color: #f0f0f0;"></div>
-
-                    <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-                        <span style="font-size: 2rem; color: #767676; font-weight: 600; margin-bottom: 10px;">
-                            현재주가 <span style="font-size: 2rem; color: #999; font-weight: 400;">({{ latest_price_date|date:"Y.m.d"|default:"데이터 없음" }})</span>
-                        </span>
-                        <span style="font-size: 2.5rem; font-weight: 800; color: #111; line-height: 1;">
-                            {% if stock_data and stock_data.close_price != None %}
-                            {{ stock_data.close_price|intcomma }}<span style="font-size: 2.5rem; font-weight: 600; color: #767676; margin-left: 6px;">원</span>
+                    <div class="overview-metric">
+                        <div class="overview-metric-title">주가</div>
+                        <div class="overview-metric-date">({{ latest_price_date|date:"Y.m.d"|default:"-" }})</div>
+                        <div class="overview-metric-value">
+                            {% if stock_data.close_price %}
+                                {{ stock_data.close_price|intcomma }}원
                             {% else %}
-                            -
+                                -
                             {% endif %}
-                        </span>
+                        </div>
                     </div>
-
                 </div>
             </div>
         </section>
-        <!-- 은영님 수정하실 부분 끝부분 -->
 
         <section class="section-block">
             <h2 class="card-title">기본 정보</h2> <!-- 기본정보 부분 -->
