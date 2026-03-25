@@ -1,13 +1,10 @@
 ﻿from django.shortcuts import render, get_object_or_404, redirect
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-import csv
 import math
 import threading
 import statistics
 import json
-from functools import lru_cache
-from pathlib import Path
 import pandas as pd
 from django.db.models import OuterRef, Q, Subquery, Max
 from django.db.utils import OperationalError, ProgrammingError
@@ -89,36 +86,6 @@ def resolve_company_currency(*finance_sources):
 def get_price_unit_label(currency_code):
     return '원' if normalize_currency_code(currency_code) == 'KRW' else normalize_currency_code(currency_code) or '원'
 
-
-@lru_cache(maxsize=1)
-def get_ecos_io_name_map():
-    io_name_map = {}
-    file_path = Path(__file__).resolve().parents[2] / 'data' / 'io_rawdata.csv'
-
-    if not file_path.exists():
-        return io_name_map
-
-    try:
-        with file_path.open(encoding='utf-8-sig', newline='') as csv_file:
-            reader = csv.reader(csv_file)
-            next(reader, None)  # header
-            for row in reader:
-                if len(row) < 5:
-                    continue
-                code_name_pairs = [
-                    (row[1], row[2]),
-                    (row[3], row[4]),
-                ]
-                for raw_code, raw_name in code_name_pairs:
-                    code = str(raw_code).strip() if raw_code is not None else ''
-                    name = str(raw_name).strip() if raw_name is not None else ''
-                    if not code or not name:
-                        continue
-                    io_name_map.setdefault(code, name)
-    except (OSError, UnicodeDecodeError, csv.Error):
-        return {}
-
-    return io_name_map
 
 def home(request):
     count = Basic.objects.filter(is_active=True).count() # BASIC의 is_active한 개수로 수정함
@@ -1616,10 +1583,49 @@ def industry(request, stock_code=None):
             'reference_date': reference_date,
         }
 
-    def build_structure_rows(rows, counterpart_field, ecos_io_name_map):
+    def build_bok_io_name_map(rows):
+        io_name_map = {}
+        for raw_code, raw_name in rows:
+            code = str(raw_code).strip() if raw_code is not None else ''
+            name = str(raw_name).strip() if raw_name is not None else ''
+            if not code or not name:
+                continue
+            io_name_map.setdefault(code, name)
+        return io_name_map
+
+    def get_bok_io_name_map(io_codes=None):
+        normalized_codes = None
+        if io_codes is not None:
+            normalized_codes = sorted(
+                {
+                    str(io_code).strip()
+                    for io_code in io_codes
+                    if io_code is not None and str(io_code).strip()
+                }
+            )
+            if not normalized_codes:
+                return {}
+
+        try:
+            qs = (
+                BokIo.objects.exclude(io_code__isnull=True)
+                .exclude(io_code='')
+                .exclude(io_name__isnull=True)
+                .exclude(io_name='')
+            )
+            if normalized_codes is not None:
+                qs = qs.filter(io_code__in=normalized_codes)
+            rows = list(qs.values_list('io_code', 'io_name').order_by('io_code', 'io_name'))
+        except (OperationalError, ProgrammingError):
+            return {}
+
+        return build_bok_io_name_map(rows)
+
+    def build_structure_rows(rows, counterpart_field, bok_io_name_map):
         result = []
         for row in rows:
-            counterpart_code = getattr(row, counterpart_field, None)
+            raw_counterpart_code = getattr(row, counterpart_field, None)
+            counterpart_code = str(raw_counterpart_code).strip() if raw_counterpart_code is not None else ''
             trade_vol = to_float(row.trade_vol)
             if not counterpart_code or trade_vol is None:
                 continue
@@ -1627,7 +1633,7 @@ def industry(request, stock_code=None):
             result.append(
                 {
                     'io_code': counterpart_code,
-                    'io_name': ecos_io_name_map.get(counterpart_code) or counterpart_code,
+                    'io_name': bok_io_name_map.get(counterpart_code) or counterpart_code,
                     'trade_vol': trade_vol,
                 }
             )
@@ -1638,7 +1644,6 @@ def industry(request, stock_code=None):
         if not company_obj.ind_code:
             return empty
 
-        ecos_io_name_map = get_ecos_io_name_map()
         option_rows = (
             BokIo.objects.filter(ind_code=company_obj.ind_code)
             .exclude(io_code__isnull=True)
@@ -1650,8 +1655,11 @@ def industry(request, stock_code=None):
         options = []
         seen_codes = set()
         for row in option_rows:
-            code = row.get('io_code')
-            name = ecos_io_name_map.get(code) or row.get('io_name') or code
+            raw_code = row.get('io_code')
+            code = str(raw_code).strip() if raw_code is not None else ''
+            raw_name = row.get('io_name')
+            name = str(raw_name).strip() if raw_name is not None else ''
+            name = name or code
             if not code or code in seen_codes:
                 continue
             seen_codes.add(code)
@@ -1674,10 +1682,10 @@ def industry(request, stock_code=None):
                 'structure_year': None,
             }
 
-        structure_map = {}
+        structure_rows_by_code = {}
+        related_codes = {option['io_code'] for option in options}
         for option in options:
             code = option['io_code']
-
             supplier_rows = list(
                 IndIo.objects.filter(year=latest_year, out_io_code=code, trade_vol__isnull=False)
                 .order_by('-trade_vol')[:3]
@@ -1686,12 +1694,27 @@ def industry(request, stock_code=None):
                 IndIo.objects.filter(year=latest_year, in_io_code=code, trade_vol__isnull=False)
                 .order_by('-trade_vol')[:3]
             )
+            structure_rows_by_code[code] = {
+                'suppliers': supplier_rows,
+                'buyers': buyer_rows,
+            }
+            for row in supplier_rows:
+                related_codes.add(getattr(row, 'in_io_code', None))
+            for row in buyer_rows:
+                related_codes.add(getattr(row, 'out_io_code', None))
+
+        bok_io_name_map = get_bok_io_name_map(related_codes)
+        structure_map = {}
+        for option in options:
+            code = option['io_code']
+            supplier_rows = structure_rows_by_code[code]['suppliers']
+            buyer_rows = structure_rows_by_code[code]['buyers']
 
             structure_map[code] = {
                 'io_code': code,
-                'io_name': ecos_io_name_map.get(code) or option['io_name'] or code,
-                'suppliers': build_structure_rows(supplier_rows, 'in_io_code', ecos_io_name_map),
-                'buyers': build_structure_rows(buyer_rows, 'out_io_code', ecos_io_name_map),
+                'io_name': bok_io_name_map.get(code) or option['io_name'] or code,
+                'suppliers': build_structure_rows(supplier_rows, 'in_io_code', bok_io_name_map),
+                'buyers': build_structure_rows(buyer_rows, 'out_io_code', bok_io_name_map),
             }
 
         return {
