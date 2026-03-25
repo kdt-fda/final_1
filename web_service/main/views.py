@@ -9,7 +9,7 @@ import json
 from functools import lru_cache
 from pathlib import Path
 import pandas as pd
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import OuterRef, Q, Subquery, Max
 from django.db.utils import OperationalError, ProgrammingError
 
 from .models import Basic, BokIo, CompanyFinance, CompanyStock, IndBok, IndIo, Report, MarketIndex, Label
@@ -198,6 +198,48 @@ def search(request):
     # 결과가 없거나 2개 이상(부분 일치 등)일 때만 검색 결과 리스트를 보여줌
     return render(request, 'search.html', {'results': results, 'query': query})
 
+def screener(request):
+    # 활성화된 기업의 stock_code 리스트
+    active_codes = Basic.objects.filter(is_active=True).values('stock_code')
+
+    # 각 종목별로 날짜 내림차순해서 가장 최신인 데이터의 깂 딱 1개씩만 가져오기
+    latest_ids = (CompanyStock.objects.filter(stock_code__in=active_codes).values('stock_code').annotate(latest_id=Max('id')).values_list('latest_id', flat=True))
+
+
+    # active_codes 안에 있는 stock_code 기준으로 COMPANY_STOCK 테이블에서 is_active가 True인 기업들의 최신 row만 남기기
+    qs = CompanyStock.objects.filter(id__in=latest_ids)
+
+    # 사용자 입력 조건 필터링 적용
+    min_price = request.GET.get('min_price') # 종가
+    max_price = request.GET.get('max_price')
+    
+    min_trdvol = request.GET.get('min_trdvol') # 거래량
+    min_bas_trdval = request.GET.get('min_bas_trdval') # 매도 거래대금
+    min_dps = request.GET.get('min_dps') # 주당 배당금
+    
+    min_per = request.GET.get('min_per') # per
+    max_per = request.GET.get('max_per')
+    
+    min_fluc_rt = request.GET.get('min_fluc_rt') # 등락률
+    max_fluc_rt = request.GET.get('max_fluc_rt')
+
+    if min_price: qs = qs.filter(close_price__gte=min_price) # min_price를 사용자가 입력했으면, qs에서 min_price 이상인거만 필터링해서 qs에 다시 넣음
+    if max_price: qs = qs.filter(close_price__lte=max_price)
+    
+    if min_trdvol: qs = qs.filter(acc_trdvol__gte=min_trdvol) 
+    if min_bas_trdval: qs = qs.filter(bas_trdval__gte=min_bas_trdval)
+    if min_dps: qs = qs.filter(dps__gte=min_dps)
+    
+    if min_per: qs = qs.filter(per__gte=min_per)
+    if max_per: qs = qs.filter(per__lte=max_per)
+    
+    if min_fluc_rt: qs = qs.filter(fluc_rt__gte=min_fluc_rt)
+    if max_fluc_rt: qs = qs.filter(fluc_rt__lte=max_fluc_rt)
+
+    valid_stock_codes = qs.values_list('stock_code', flat=True) # 필터링 끝난 stock_code 목록
+    results = Basic.objects.filter(stock_code__in=valid_stock_codes).order_by('corp_name') # basic에서 해당 기업 정보들 가져옴
+
+    return render(request, 'screener.html', {'results': results})
 
 def ai_page(request, stock_code):
     company = get_object_or_404(Basic.objects.select_related('ind_code'), stock_code=stock_code) # BASIC 테이블에 있는 stock_code만 가져오게 함

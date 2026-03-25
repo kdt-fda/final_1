@@ -7,6 +7,6 @@ urlpatterns = [
     path('overview/<str:stock_code>/', views.overview, name='overview'),
     path('ai_page/<str:stock_code>/', views.ai_page, name='ai_page'),
     path('finance/<str:stock_code>/', views.finance, name='finance'),
-    path('industry/<str:stock_code>/', views.industry, name='industry')
+    path('industry/<str:stock_code>/', views.industry, name='industry'),
+    path('screener/', views.screener, name='screener'),
 ]
-

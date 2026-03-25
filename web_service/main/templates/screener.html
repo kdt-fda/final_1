@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스크리너 검색 결과 | Open-Q</title>
+    <style>
+        body { /* body 태그의 스타일 설정 */
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif; /* 글꼴 설정하는 부분 */
+            background: linear-gradient(180deg, #D6E4FF 0%, #FFFFFF 30%); /* 화면에 파란 그라데이션 부분,  30% 지점까지 서서히 하얗게 바뀌게 해줌, 그 이후 쭉 흰색*/
+            margin: 0; /* body의 여백 부분 설정인데, 그냥 0이 나음*/
+            /* 이 아래 부분은 그냥 화면에 유연하게 잘 쌓고, 가운데에 모아두는 부분이라고 생각하면 됨 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh; /* 화면 내용이 적더라도 화면 전체 꽉차게 보이기 위한 설정 */
+            color: #333; /* 글자색 추가로 설정 */
+        }
+        /* body 안에 있는 container에 대한 설정, 전부다 가운데 정렬을 시키는 부분*/
+        .container { width: 100%; max-width: 850px; text-align: center; margin-top: 100px; padding: 20px; box-sizing: border-box; }
+        
+        /* 로고 스타일, h1이 제목을 나타내는 태그임*/
+        h1 { font-size: 3.5rem; margin-bottom: 15px; letter-spacing: -1px; }
+        h1 a { text-decoration: none; color: #000; transition: opacity 0.2s; } /* open-Q에 링크 달아놔서 링크 밑줄 없애고, 검은색 글자색, 마우스 올렸을 때 스르륵 바뀌는 애니메이션 효과 */
+        h1 a:hover { opacity: 0.7; } /* 마우스 올리면 투명도를 70%로 낮춤. 이게 위에서 0.2초간 스르륵 바뀌게 해서 애니메이션처럼 보이게 됨 */
+
+        /* 검색 정보, 로고 바로 아래 글 스타일 */
+        .search-info { text-align: center; color: #555; margin-bottom: 50px; font-size: 1.3rem; }
+        .search-info strong { color: #3498db; }
+
+        /* 결과 리스트 스타일 */
+        .results-list { list-style: none; padding: 0; margin: 0; } /* 리스트 박스 앞에 '·'를 지우고 여백 조절 */
+        .result-item {
+            background: white; margin-bottom: 20px; border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s, box-shadow 0.2s;
+        } /* 리스트 박스의 스타일 설정. 색깔이랑 여백, 그림자 설정 */
+        .result-item:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); } /* 호버 넣어서 마우스 올리면 애니메이션 효과처럼 보이게끔 */
+
+        .result-link { 
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 25px 30px; text-decoration: none; color: inherit;
+        } /* 링크 티 안나게 하고, 안에 요소들 배치 기초 설정 */
+
+        .corp-info { display: flex; flex-direction: column; align-items: flex-start; } /* 종목 코드를 기업명 아래 쌓기 위한 설정 */
+        .corp-name { font-size: 1.5rem; font-weight: bold; color: #222; } /* 기업명 스타일 지정 */
+        .stock-code { font-size: 1.1rem; color: #888; margin-top: 6px; text-align: left; } /* 종목코드 스타일 지정 */
+
+        .arrow { color: #3498db; font-weight: bold; font-size: 1.2rem; } /* 분석리포트 보기에 대한 설정 */
+
+        /* 결과 없음 및 하단 버튼 */
+        .no-results { text-align: center; padding: 80px 20px; font-size: 1.2rem; color: #777; } /* 검색 결과 없을 때 글자 스타일 */
+        .footer-nav { margin-top: 60px; text-align: center; } /* 홈으로 돌아가기 버튼 세팅 */
+        .back-link {
+            text-decoration: none; color: #3498db; font-weight: 600; font-size: 1.1rem; /* 링크 티 안나게 하고, 버튼 내 글자 스타일 지정 */
+            padding: 14px 40px; border: 2px solid #3498db; border-radius: 35px; transition: all 0.3s; /* 테두리 지정 및 둥글게 */
+        }
+        .back-link:hover { background: #3498db; color: white; } /* 마우스 올려두면 생 반전되는 효과 주기 (배경 파랑, 글자 흰색) */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><a href="{% url 'home' %}">Open-Q</a></h1> <!-- 로고 누르면 홈으로 이동 -->
+    
+    <div class="search-info">
+        <p>설정하신 조건에 맞는 기업이 총 <strong>{{ results|length }}</strong>개 있습니다.</p>
+    </div>
+
+    {% if results %} <!-- 필터링한 조건에 해당하는 기업이 있는 경우 -->
+        <ul class="results-list"> <!-- ul이 글머리 만드는 태그, 반드시 li랑 같이 사용해야됨 -->
+            {% for company in results %}
+                <li class="result-item"> <!-- li 태그로 리스트 형태로 보여주는 것 -->
+                    <a href="{% url 'overview' company.stock_code %}" class="result-link"> <!-- 링크 연결 부분 -->
+                        <div class="corp-info">
+                            <span class="corp-name">{{ company.corp_name }}</span> <!-- 회사 이름 -->
+                            <span class="stock-code">{{ company.stock_code }}</span>  <!-- 종목코드 -->
+                        </div>
+                        <span class="arrow">분석 리포트 보기 〉</span>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %} <!-- 필터링 조건에 해당하는 기업이 없는 경우 -->
+        <div class="no-results">
+            <p>조건에 맞는 검색 결과가 없습니다.<br>필터링 조건을 조절해 보세요.</p>
+        </div>
+    {% endif %}
+
+    <div class="footer-nav"> <!-- 이거는 있든 없든 둘다 포함 (홈으로 돌아가는 버튼) -->
+        <a href="{% url 'home' %}" class="back-link">홈으로 돌아가기</a>
+    </div>
+</div>
+
+</body>
+</html>
